@@ -14,7 +14,6 @@ def generate_data_dictionary():
             'quality': 30
         }
         
-        # Header format
         header = "{:<{w[table]}} {:<{w[column]}} {:<{w[type]}} {:<{w[description]}} {:<{w[logic]}} {:<{w[source]}} {:<{w[quality]}}".format(
             "Table Name", "Column Name", "Data Type", "Description", "Business Logic", "Source Field", "Quality Rules",
             w=col_widths
@@ -24,42 +23,27 @@ def generate_data_dictionary():
         print(header)
         print("=" * (sum(col_widths.values()) + 7))
         
-        # Get all tables
         tables = spark.sql("SHOW TABLES FROM staging.bk_mpo").collect()
         
         for table in tables:
             table_name = table.tableName
-            
-            # Get column details
             columns = spark.sql(f"DESCRIBE staging.bk_mpo.{table_name}").collect()
             
-            # Get extended properties if available (comment/description)
-            try:
-                extended_props = spark.sql(f"DESCRIBE EXTENDED staging.bk_mpo.{table_name}").collect()
-            except:
-                extended_props = []
-            
             for col in columns:
-                # Skip partition information and empty rows
                 if col.col_name and not col.col_name.startswith('#'):
-                    # Try to find column comment from extended properties
                     description = "No description available"
-                    for prop in extended_props:
-                        if prop.col_name == col.col_name and hasattr(prop, 'comment'):
-                            description = prop.comment
                     
                     print("{:<{w[table]}} {:<{w[column]}} {:<{w[type]}} {:<{w[description]}} {:<{w[logic]}} {:<{w[source]}} {:<{w[quality]}}".format(
                         table_name,
                         col.col_name,
                         col.data_type,
-                        description[:39] + '...' if len(description) > 40 else description,
-                        "N/A",  # Business Logic placeholder
-                        "N/A",  # Source Field placeholder
-                        "N/A",  # Quality Rules placeholder
+                        description,
+                        "N/A",
+                        "N/A",
+                        "N/A",
                         w=col_widths
                     ))
             
-            # Add separator between tables
             print("-" * (sum(col_widths.values()) + 7))
                     
     except Exception as e:
