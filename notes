@@ -1,68 +1,79 @@
 from pyspark.sql import SparkSession
 import csv
-import os
 from datetime import datetime
 
-def generate_csv_dictionary():
+def generate_access_control_report():
     spark = SparkSession.builder.getOrCreate()
-    
-    # Create filename with timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"data_dictionary_{timestamp}.csv"
+    filename = f"access_control_report_{timestamp}.csv"
     
     try:
         with open(filename, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
             
             # Write headers
-            writer.writerow(['Table Name', 'Column Name', 'Data Type', 'Description', 'Primary Key', 'Foreign Key'])
+            writer.writerow(['Securable Type', 'Securable Name', 'Principal Name', 'Action Type', 'Inherited'])
+            
+            # Get permissions for catalog
+            writer.writerow(['=' * 20] * 5)  # Separator
+            writer.writerow(['CATALOG PERMISSIONS'] + [''] * 4)
+            writer.writerow(['=' * 20] * 5)  # Separator
+            
+            catalog_perms = spark.sql("SHOW GRANT ON CATALOG staging").collect()
+            for perm in catalog_perms:
+                writer.writerow([
+                    'CATALOG',
+                    'staging',
+                    perm.principal,
+                    perm.action_type,
+                    perm.inherited
+                ])
+            
+            writer.writerow([])  # Blank line
+            
+            # Get permissions for schema
+            writer.writerow(['=' * 20] * 5)  # Separator
+            writer.writerow(['SCHEMA PERMISSIONS'] + [''] * 4)
+            writer.writerow(['=' * 20] * 5)  # Separator
+            
+            schema_perms = spark.sql("SHOW GRANT ON SCHEMA staging.bk_mpo").collect()
+            for perm in schema_perms:
+                writer.writerow([
+                    'SCHEMA',
+                    'staging.bk_mpo',
+                    perm.principal,
+                    perm.action_type,
+                    perm.inherited
+                ])
+            
+            writer.writerow([])  # Blank line
+            
+            # Get permissions for each table
+            writer.writerow(['=' * 20] * 5)  # Separator
+            writer.writerow(['TABLE PERMISSIONS'] + [''] * 4)
+            writer.writerow(['=' * 20] * 5)  # Separator
             
             tables = spark.sql("SHOW TABLES FROM staging.bk_mpo").collect()
-            
             for table in tables:
                 table_name = table.tableName
-                # Add table separator
-                writer.writerow(['=' * 20] * 6)
+                table_perms = spark.sql(f"SHOW GRANT ON TABLE staging.bk_mpo.{table_name}").collect()
                 
-                columns = spark.sql(f"DESCRIBE staging.bk_mpo.{table_name}").collect()
-                
-                try:
-                    constraints = spark.sql(f"SHOW TBLPROPERTIES staging.bk_mpo.{table_name}").collect()
-                except:
-                    constraints = []
-                
-                pk_cols = set()
-                fk_info = {}
-                for prop in constraints:
-                    if 'pk' in prop.key.lower():
-                        pk_cols.update(prop.value.split(','))
-                    elif 'fk' in prop.key.lower():
-                        fk_parts = prop.value.split(':')
-                        if len(fk_parts) > 1:
-                            fk_info[fk_parts[0]] = f"References {fk_parts[1]}"
-                
-                for col in columns:
-                    if col.col_name and not col.col_name.startswith('#'):
-                        is_pk = 'Yes' if col.col_name in pk_cols else 'No'
-                        fk_reference = fk_info.get(col.col_name, 'No')
-                        
-                        writer.writerow([
-                            table_name,
-                            col.col_name,
-                            col.data_type,
-                            "No description available",
-                            is_pk,
-                            fk_reference
-                        ])
-                
-                # Add blank line between tables
-                writer.writerow([])
+                writer.writerow([f'Permissions for table: {table_name}'] + [''] * 4)
+                for perm in table_perms:
+                    writer.writerow([
+                        'TABLE',
+                        f'staging.bk_mpo.{table_name}',
+                        perm.principal,
+                        perm.action_type,
+                        perm.inherited
+                    ])
+                writer.writerow([])  # Blank line between tables
         
-        print(f"CSV file has been created: {filename}")
-        print(f"You can now open this file directly in Microsoft Word or Excel.")
+        print(f"Access Control report has been created: {filename}")
+        print("You can open this file directly in Microsoft Excel or Word.")
                     
     except Exception as e:
         print(f"Error: {str(e)}")
 
 if __name__ == "__main__":
-    generate_csv_dictionary()
+    generate_access_control_report()
