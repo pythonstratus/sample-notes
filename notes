@@ -9,42 +9,61 @@ def generate_data_dictionary():
             'column': 25,
             'type': 20,
             'description': 40,
-            'logic': 40,
-            'source': 25,
-            'quality': 30
+            'pk': 15,
+            'fk': 40
         }
         
-        header = "{:<{w[table]}} {:<{w[column]}} {:<{w[type]}} {:<{w[description]}} {:<{w[logic]}} {:<{w[source]}} {:<{w[quality]}}".format(
-            "Table Name", "Column Name", "Data Type", "Description", "Business Logic", "Source Field", "Quality Rules",
+        header = "{:<{w[table]}} {:<{w[column]}} {:<{w[type]}} {:<{w[description]}} {:<{w[pk]}} {:<{w[fk]}}".format(
+            "Table Name", "Column Name", "Data Type", "Description", "Primary Key", "Foreign Key",
             w=col_widths
         )
         
-        print("\n" + "=" * (sum(col_widths.values()) + 7))
+        print("\n" + "=" * (sum(col_widths.values()) + 6))
         print(header)
-        print("=" * (sum(col_widths.values()) + 7))
+        print("=" * (sum(col_widths.values()) + 6))
         
         tables = spark.sql("SHOW TABLES FROM staging.bk_mpo").collect()
         
         for table in tables:
             table_name = table.tableName
+            
+            # Get column details
             columns = spark.sql(f"DESCRIBE staging.bk_mpo.{table_name}").collect()
+            
+            # Get constraints if they exist
+            try:
+                constraints = spark.sql(f"SHOW TBLPROPERTIES staging.bk_mpo.{table_name}").collect()
+            except:
+                constraints = []
+            
+            # Extract primary and foreign key information
+            pk_cols = set()
+            fk_info = {}
+            
+            for prop in constraints:
+                if 'pk' in prop.key.lower():
+                    pk_cols.update(prop.value.split(','))
+                elif 'fk' in prop.key.lower():
+                    fk_parts = prop.value.split(':')
+                    if len(fk_parts) > 1:
+                        fk_info[fk_parts[0]] = f"References {fk_parts[1]}"
             
             for col in columns:
                 if col.col_name and not col.col_name.startswith('#'):
-                    description = "No description available"
+                    is_pk = 'Yes' if col.col_name in pk_cols else 'No'
+                    fk_reference = fk_info.get(col.col_name, 'No')
                     
-                    print("{:<{w[table]}} {:<{w[column]}} {:<{w[type]}} {:<{w[description]}} {:<{w[logic]}} {:<{w[source]}} {:<{w[quality]}}".format(
+                    print("{:<{w[table]}} {:<{w[column]}} {:<{w[type]}} {:<{w[description]}} {:<{w[pk]}} {:<{w[fk]}}".format(
                         table_name,
                         col.col_name,
                         col.data_type,
-                        description,
-                        "N/A",
-                        "N/A",
-                        "N/A",
+                        "No description available",
+                        is_pk,
+                        fk_reference,
                         w=col_widths
                     ))
             
-            print("-" * (sum(col_widths.values()) + 7))
+            print("-" * (sum(col_widths.values()) + 6))
                     
     except Exception as e:
         print(f"Error: {str(e)}")
