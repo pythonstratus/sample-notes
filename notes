@@ -4,7 +4,6 @@ def print_table_inventory():
     spark = SparkSession.builder.getOrCreate()
     
     try:
-        # Set fixed column widths
         col_widths = {
             'catalog': 20,
             'schema': 20,
@@ -14,29 +13,25 @@ def print_table_inventory():
             'location': 50
         }
         
-        # Create header
         header = "{:<{w[catalog]}} {:<{w[schema]}} {:<{w[table]}} {:<{w[type]}} {:<{w[format]}} {:<{w[location]}}".format(
             "Catalog", "Schema", "Table Name", "Type", "Format", "Location", w=col_widths
         )
         
-        # Print header with decorative borders
         print("\n" + "=" * (sum(col_widths.values()) + 5))
         print(header)
         print("=" * (sum(col_widths.values()) + 5))
         
-        # Get tables from staging.bk_mpo
         tables = spark.sql("SHOW TABLES IN staging.bk_mpo").collect()
         
         for table in tables:
             table_name = table.tableName
             details = spark.sql(f"DESCRIBE DETAIL staging.bk_mpo.{table_name}").collect()[0]
             
-            # Print each row with consistent formatting
             print("{:<{w[catalog]}} {:<{w[schema]}} {:<{w[table]}} {:<{w[type]}} {:<{w[format]}} {:<{w[location]}}".format(
                 "hive_metastore",
                 "staging.bk_mpo",
                 table_name,
-                'external' if details.tableType == 'EXTERNAL' else 'managed',
+                'external' if details.is_external else 'managed',
                 details.format,
                 details.location,
                 w=col_widths
