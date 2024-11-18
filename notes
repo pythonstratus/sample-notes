@@ -1,0 +1,61 @@
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, lit
+
+def get_table_inventory():
+    spark = SparkSession.builder.getOrCreate()
+    
+    # Initialize empty list to store inventory data
+    inventory_data = []
+    
+    # Get all catalogs
+    catalogs = spark.sql("SHOW CATALOGS").collect()
+    
+    for catalog in catalogs:
+        catalog_name = catalog.catalog
+        
+        # Get all schemas in the catalog
+        spark.sql(f"USE CATALOG {catalog_name}")
+        schemas = spark.sql("SHOW SCHEMAS").collect()
+        
+        for schema in schemas:
+            schema_name = schema.databaseName
+            
+            # Get all tables in the schema
+            tables = spark.sql(f"SHOW TABLES IN {catalog_name}.{schema_name}").collect()
+            
+            for table in tables:
+                table_name = table.tableName
+                
+                # Get detailed table information
+                table_details = spark.sql(f"DESCRIBE DETAIL {catalog_name}.{schema_name}.{table_name}").collect()[0]
+                
+                inventory_data.append({
+                    'catalog': catalog_name,
+                    'schema': schema_name,
+                    'table_name': table_name,
+                    'type': 'external' if table_details.tableType == 'EXTERNAL' else 'managed',
+                    'format': table_details.format,
+                    'location': table_details.location
+                })
+    
+    # Convert to DataFrame
+    inventory_df = spark.createDataFrame(inventory_data)
+    
+    return inventory_df
+
+def main():
+    try:
+        # Get inventory
+        inventory_df = get_table_inventory()
+        
+        # Show results
+        inventory_df.show(truncate=False)
+        
+        # Optional: Save to Delta table
+        inventory_df.write.format("delta").mode("overwrite").saveAsTable("table_inventory")
+        
+    except Exception as e:
+        print(f"Error occurred: {str(e)}")
+
+if __name__ == "__main__":
+    main()
