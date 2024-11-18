@@ -2,74 +2,99 @@ from pyspark.sql import SparkSession
 import csv
 from datetime import datetime
 
-def generate_access_control_report():
+def get_pipeline_inventory():
     spark = SparkSession.builder.getOrCreate()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"access_control_report_{timestamp}.csv"
+    filename = f"pipeline_inventory_{timestamp}.csv"
     
     try:
-        # First, let's check what catalog we're using
-        current_catalog = spark.sql("SELECT current_catalog()").collect()[0][0]
-        print(f"Current catalog: {current_catalog}")
-        
         with open(filename, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
-            writer.writerow(['Securable Type', 'Securable Name', 'Principal Name', 'Action Type', 'Inherited'])
             
+            # Write headers
+            writer.writerow([
+                'Pipeline Name',
+                'State',
+                'Created By',
+                'Created Time',
+                'Last Modified',
+                'Target Schema',
+                'Target Tables',
+                'Schedule',
+                'Latest Update Status'
+            ])
+            
+            # Query pipelines using DLT API
             try:
-                # Try Unity Catalog syntax
-                print("Attempting to get Unity Catalog permissions...")
-                catalog_perms = spark.sql("SHOW GRANTS ON CATALOG staging").collect()
-                for perm in catalog_perms:
-                    writer.writerow(['CATALOG', 'staging', perm.principal, perm.privilege, 'N/A'])
-            except Exception as e:
-                print(f"Unity Catalog permission check failed: {str(e)}")
-            
-            try:
-                # Try Hive syntax
-                print("Attempting to get Hive permissions...")
-                hive_perms = spark.sql("SHOW GRANT ON DATABASE staging").collect()
-                for perm in hive_perms:
-                    writer.writerow(['DATABASE', 'staging', perm.principalName, perm.actionType, perm.inherited])
-            except Exception as e:
-                print(f"Hive permission check failed: {str(e)}")
-            
-            # Try to get table-level permissions
-            tables = spark.sql("SHOW TABLES FROM staging.bk_mpo").collect()
-            for table in tables:
-                table_name = table.tableName
-                print(f"Checking permissions for table: {table_name}")
+                pipelines = spark.sql("""
+                    SELECT *
+                    FROM system.pipelines
+                    WHERE target_schema LIKE '%staging.bk_mpo%'
+                    OR target_table LIKE '%staging.bk_mpo%'
+                """).collect()
                 
-                try:
-                    # Try Unity Catalog syntax
-                    table_perms = spark.sql(f"SHOW GRANTS ON TABLE staging.bk_mpo.{table_name}").collect()
-                    for perm in table_perms:
-                        writer.writerow(['TABLE', f'staging.bk_mpo.{table_name}', 
-                                       perm.principal, perm.privilege, 'N/A'])
-                except Exception as e:
-                    print(f"Failed to get Unity Catalog permissions for table {table_name}: {str(e)}")
+                for pipeline in pipelines:
+                    writer.writerow([
+                        pipeline.pipeline_name,
+                        pipeline.state,
+                        pipeline.created_by,
+                        pipeline.creation_time,
+                        pipeline.last_modified,
+                        pipeline.target_schema,
+                        pipeline.target_table,
+                        pipeline.schedule,
+                        pipeline.latest_update_status
+                    ])
                     
-                    try:
-                        # Try Hive syntax
-                        table_perms = spark.sql(f"SHOW GRANT ON TABLE staging.bk_mpo.{table_name}").collect()
-                        for perm in table_perms:
-                            writer.writerow(['TABLE', f'staging.bk_mpo.{table_name}', 
-                                           perm.principalName, perm.actionType, perm.inherited])
-                    except Exception as e:
-                        print(f"Failed to get Hive permissions for table {table_name}: {str(e)}")
+            except Exception as e:
+                print(f"Error querying DLT pipelines: {str(e)}")
+            
+            # Try querying Jobs API for workflow information
+            try:
+                workflows = spark.sql("""
+                    SELECT *
+                    FROM system.jobs
+                    WHERE settings LIKE '%staging.bk_mpo%'
+                """).collect()
+                
+                writer.writerow([])
+                writer.writerow(['=== Workflow Jobs ==='])
+                writer.writerow([
+                    'Job Name',
+                    'Creator',
+                    'Created Time',
+                    'Last Modified',
+                    'Schedule',
+                    'State',
+                    'Latest Run Status'
+                ])
+                
+                for workflow in workflows:
+                    writer.writerow([
+                        workflow.job_name,
+                        workflow.creator_user_name,
+                        workflow.created_time,
+                        workflow.last_modified,
+                        workflow.schedule,
+                        workflow.state,
+                        workflow.latest_run_status
+                    ])
+                    
+            except Exception as e:
+                print(f"Error querying workflows: {str(e)}")
         
-        print(f"\nAccess Control report has been created: {filename}")
-        print("Note: If the file is empty, this could mean:")
-        print("1. You don't have permissions to view the grants")
-        print("2. The permissions are managed at a different level")
-        print("3. The database might be using a different security model")
-        print("\nTry running these queries manually to check:")
-        print("1. SHOW GRANTS ON CATALOG staging")
-        print("2. SHOW GRANTS ON SCHEMA staging.bk_mpo")
-        print("3. SHOW GRANTS ON TABLE staging.bk_mpo.<table_name>")
+        print(f"\nPipeline inventory has been created: {filename}")
+        print("\nNote: If the file is empty, this could mean:")
+        print("1. No pipelines are currently configured for this schema")
+        print("2. You don't have permissions to view the pipeline information")
+        print("3. The pipelines might be configured in a different way")
+        print("\nYou might want to check:")
+        print("1. Delta Live Tables UI in Databricks")
+        print("2. Workflows UI in Databricks")
+        print("3. Job runs targeting this schema")
                     
     except Exception as e:
         print(f"Error: {str(e)}")
 
 if __name__ == "__main__":
-    generate_access_control_report()
+    get_pipeline_inventory()
