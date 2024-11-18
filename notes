@@ -1,51 +1,61 @@
 from pyspark.sql import SparkSession
 
-def print_table_inventory():
+def print_delta_properties():
     spark = SparkSession.builder.getOrCreate()
     
     try:
         col_widths = {
-            'catalog': 20,
-            'schema': 20,
             'table': 30,
-            'type': 15,
-            'format': 15,
-            'location': 50
+            'version': 10,
+            'partitions': 30,
+            'zorder': 30,
+            'retention': 15
         }
         
-        header = "{:<{w[catalog]}} {:<{w[schema]}} {:<{w[table]}} {:<{w[type]}} {:<{w[format]}} {:<{w[location]}}".format(
-            "Catalog", "Schema", "Table Name", "Type", "Format", "Location", w=col_widths
+        header = "{:<{w[table]}} {:<{w[version]}} {:<{w[partitions]}} {:<{w[zorder]}} {:<{w[retention]}}".format(
+            "Table Name", "Version", "Partition Columns", "Z-Order Columns", "Retention Hrs",
+            w=col_widths
         )
         
         print("\n" + "=" * (sum(col_widths.values()) + 5))
         print(header)
         print("=" * (sum(col_widths.values()) + 5))
         
-        # Get tables with properties
         tables = spark.sql("SHOW TABLES FROM staging.bk_mpo").collect()
         
         for table in tables:
             table_name = table.tableName
+            
+            # Get table details and properties
             details = spark.sql(f"DESCRIBE DETAIL staging.bk_mpo.{table_name}").collect()[0]
             
-            # Get table properties to determine if external
-            table_props = spark.sql(f"SHOW TBLPROPERTIES staging.bk_mpo.{table_name}").collect()
-            table_type = 'managed'  # default type
-            
-            for prop in table_props:
-                if prop.key == 'EXTERNAL' and prop.value.lower() == 'true':
-                    table_type = 'external'
-                    break
-            
-            print("{:<{w[catalog]}} {:<{w[schema]}} {:<{w[table]}} {:<{w[type]}} {:<{w[format]}} {:<{w[location]}}".format(
-                "hive_metastore",
-                "staging.bk_mpo",
-                table_name,
-                table_type,
-                details.format,
-                details.location,
-                w=col_widths
-            ))
+            if details.format.lower() == 'delta':
+                # Get table history for version
+                history = spark.sql(f"DESCRIBE HISTORY staging.bk_mpo.{table_name}").collect()
+                current_version = str(len(history))
+                
+                # Get partition columns
+                partition_cols = ', '.join(details.partitionColumns) if details.partitionColumns else 'None'
+                
+                # Get Z-Order columns from properties
+                tbl_properties = spark.sql(f"SHOW TBLPROPERTIES staging.bk_mpo.{table_name}").collect()
+                zorder_cols = 'None'
+                retention_hours = 'Default'
+                
+                for prop in tbl_properties:
+                    if prop.key == 'delta.zorderBy':
+                        zorder_cols = prop.value
+                    elif prop.key == 'delta.deletedFileRetentionDuration':
+                        retention_hours = prop.value
+                
+                print("{:<{w[table]}} {:<{w[version]}} {:<{w[partitions]}} {:<{w[zorder]}} {:<{w[retention]}}".format(
+                    table_name,
+                    current_version,
+                    partition_cols,
+                    zorder_cols,
+                    retention_hours,
+                    w=col_widths
+                ))
         
         print("=" * (sum(col_widths.values()) + 5))
                     
@@ -53,4 +63,4 @@ def print_table_inventory():
         print(f"Error: {str(e)}")
 
 if __name__ == "__main__":
-    print_table_inventory()
+    print_delta_properties()
