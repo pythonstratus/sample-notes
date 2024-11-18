@@ -1,66 +1,69 @@
 from pyspark.sql import SparkSession
 
-def print_delta_properties():
+def generate_data_dictionary():
     spark = SparkSession.builder.getOrCreate()
     
     try:
         col_widths = {
-            'table': 30,
-            'version': 10,
-            'partitions': 30,
-            'zorder': 30,
-            'retention': 15
+            'table': 25,
+            'column': 25,
+            'type': 20,
+            'description': 40,
+            'logic': 40,
+            'source': 25,
+            'quality': 30
         }
         
-        header = "{:<{w[table]}} {:<{w[version]}} {:<{w[partitions]}} {:<{w[zorder]}} {:<{w[retention]}}".format(
-            "Table Name", "Version", "Partition Columns", "Z-Order Columns", "Retention Hrs",
+        # Header format
+        header = "{:<{w[table]}} {:<{w[column]}} {:<{w[type]}} {:<{w[description]}} {:<{w[logic]}} {:<{w[source]}} {:<{w[quality]}}".format(
+            "Table Name", "Column Name", "Data Type", "Description", "Business Logic", "Source Field", "Quality Rules",
             w=col_widths
         )
         
-        print("\n" + "=" * (sum(col_widths.values()) + 5))
+        print("\n" + "=" * (sum(col_widths.values()) + 7))
         print(header)
-        print("=" * (sum(col_widths.values()) + 5))
+        print("=" * (sum(col_widths.values()) + 7))
         
+        # Get all tables
         tables = spark.sql("SHOW TABLES FROM staging.bk_mpo").collect()
         
         for table in tables:
             table_name = table.tableName
             
-            # Get table details and properties
-            details = spark.sql(f"DESCRIBE DETAIL staging.bk_mpo.{table_name}").collect()[0]
+            # Get column details
+            columns = spark.sql(f"DESCRIBE staging.bk_mpo.{table_name}").collect()
             
-            if details.format.lower() == 'delta':
-                # Get table history for version
-                history = spark.sql(f"DESCRIBE HISTORY staging.bk_mpo.{table_name}").collect()
-                current_version = str(len(history))
-                
-                # Get partition columns
-                partition_cols = ', '.join(details.partitionColumns) if details.partitionColumns else 'None'
-                
-                # Get Z-Order columns from properties
-                tbl_properties = spark.sql(f"SHOW TBLPROPERTIES staging.bk_mpo.{table_name}").collect()
-                zorder_cols = 'None'
-                retention_hours = 'Default'
-                
-                for prop in tbl_properties:
-                    if prop.key == 'delta.zorderBy':
-                        zorder_cols = prop.value
-                    elif prop.key == 'delta.deletedFileRetentionDuration':
-                        retention_hours = prop.value
-                
-                print("{:<{w[table]}} {:<{w[version]}} {:<{w[partitions]}} {:<{w[zorder]}} {:<{w[retention]}}".format(
-                    table_name,
-                    current_version,
-                    partition_cols,
-                    zorder_cols,
-                    retention_hours,
-                    w=col_widths
-                ))
-        
-        print("=" * (sum(col_widths.values()) + 5))
+            # Get extended properties if available (comment/description)
+            try:
+                extended_props = spark.sql(f"DESCRIBE EXTENDED staging.bk_mpo.{table_name}").collect()
+            except:
+                extended_props = []
+            
+            for col in columns:
+                # Skip partition information and empty rows
+                if col.col_name and not col.col_name.startswith('#'):
+                    # Try to find column comment from extended properties
+                    description = "No description available"
+                    for prop in extended_props:
+                        if prop.col_name == col.col_name and hasattr(prop, 'comment'):
+                            description = prop.comment
+                    
+                    print("{:<{w[table]}} {:<{w[column]}} {:<{w[type]}} {:<{w[description]}} {:<{w[logic]}} {:<{w[source]}} {:<{w[quality]}}".format(
+                        table_name,
+                        col.col_name,
+                        col.data_type,
+                        description[:39] + '...' if len(description) > 40 else description,
+                        "N/A",  # Business Logic placeholder
+                        "N/A",  # Source Field placeholder
+                        "N/A",  # Quality Rules placeholder
+                        w=col_widths
+                    ))
+            
+            # Add separator between tables
+            print("-" * (sum(col_widths.values()) + 7))
                     
     except Exception as e:
         print(f"Error: {str(e)}")
 
 if __name__ == "__main__":
-    print_delta_properties()
+    generate_data_dictionary()
