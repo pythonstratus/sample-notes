@@ -21,19 +21,27 @@ def print_table_inventory():
         print(header)
         print("=" * (sum(col_widths.values()) + 5))
         
-        # Get extended table information
-        tables = spark.sql("SHOW EXTENDED TABLES IN staging.bk_mpo").collect()
+        # Get tables with properties
+        tables = spark.sql("SHOW TABLES FROM staging.bk_mpo").collect()
         
         for table in tables:
             table_name = table.tableName
-            isTemporary = table.isTemporary
             details = spark.sql(f"DESCRIBE DETAIL staging.bk_mpo.{table_name}").collect()[0]
+            
+            # Get table properties to determine if external
+            table_props = spark.sql(f"SHOW TBLPROPERTIES staging.bk_mpo.{table_name}").collect()
+            table_type = 'managed'  # default type
+            
+            for prop in table_props:
+                if prop.key == 'EXTERNAL' and prop.value.lower() == 'true':
+                    table_type = 'external'
+                    break
             
             print("{:<{w[catalog]}} {:<{w[schema]}} {:<{w[table]}} {:<{w[type]}} {:<{w[format]}} {:<{w[location]}}".format(
                 "hive_metastore",
                 "staging.bk_mpo",
                 table_name,
-                'temporary' if isTemporary else 'managed',
+                table_type,
                 details.format,
                 details.location,
                 w=col_widths
