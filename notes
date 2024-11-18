@@ -1,12 +1,15 @@
 from pyspark.sql import SparkSession
-from tabulate import tabulate
 
 def get_table_inventory():
     spark = SparkSession.builder.getOrCreate()
-    inventory_data = []
     
     try:
         catalogs = spark.sql("SHOW CATALOGS").collect()
+        
+        # Print header
+        print("\n{:<20} {:<20} {:<30} {:<15} {:<15} {:<50}".format(
+            "Catalog", "Schema", "Table Name", "Type", "Format", "Location"))
+        print("-" * 150)
         
         for catalog in catalogs:
             catalog_name = catalog.catalog
@@ -21,19 +24,16 @@ def get_table_inventory():
                     table_name = table.tableName
                     details = spark.sql(f"DESCRIBE DETAIL {catalog_name}.{schema_name}.{table_name}").collect()[0]
                     
-                    inventory_data.append([
+                    # Print formatted row
+                    print("{:<20} {:<20} {:<30} {:<15} {:<15} {:<50}".format(
                         catalog_name,
                         schema_name,
                         table_name,
                         'external' if details.tableType == 'EXTERNAL' else 'managed',
                         details.format,
                         details.location
-                    ])
-        
-        # Print formatted table
-        headers = ['Catalog', 'Schema', 'Table Name', 'Type', 'Format', 'Location']
-        print(tabulate(inventory_data, headers=headers, tablefmt='grid'))
-        
+                    ))
+                    
     except Exception as e:
         print(f"Error: {str(e)}")
 
