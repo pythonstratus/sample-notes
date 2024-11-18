@@ -1,45 +1,33 @@
 from pyspark.sql import SparkSession
+import csv
+from io import StringIO
 
-def generate_data_dictionary():
+def generate_word_friendly_dictionary():
     spark = SparkSession.builder.getOrCreate()
+    output = StringIO()
+    writer = csv.writer(output, delimiter='\t')
     
     try:
-        col_widths = {
-            'table': 25,
-            'column': 25,
-            'type': 20,
-            'description': 40,
-            'pk': 15,
-            'fk': 40
-        }
-        
-        header = "{:<{w[table]}} {:<{w[column]}} {:<{w[type]}} {:<{w[description]}} {:<{w[pk]}} {:<{w[fk]}}".format(
-            "Table Name", "Column Name", "Data Type", "Description", "Primary Key", "Foreign Key",
-            w=col_widths
-        )
-        
-        print("\n" + "=" * (sum(col_widths.values()) + 6))
-        print(header)
-        print("=" * (sum(col_widths.values()) + 6))
+        # Write headers
+        writer.writerow(['Table Name', 'Column Name', 'Data Type', 'Description', 'Primary Key', 'Foreign Key'])
         
         tables = spark.sql("SHOW TABLES FROM staging.bk_mpo").collect()
         
         for table in tables:
             table_name = table.tableName
+            # Add table separator
+            writer.writerow(['=' * 100])
             
-            # Get column details
             columns = spark.sql(f"DESCRIBE staging.bk_mpo.{table_name}").collect()
             
-            # Get constraints if they exist
             try:
                 constraints = spark.sql(f"SHOW TBLPROPERTIES staging.bk_mpo.{table_name}").collect()
             except:
                 constraints = []
             
-            # Extract primary and foreign key information
+            # Extract key information
             pk_cols = set()
             fk_info = {}
-            
             for prop in constraints:
                 if 'pk' in prop.key.lower():
                     pk_cols.update(prop.value.split(','))
@@ -53,20 +41,25 @@ def generate_data_dictionary():
                     is_pk = 'Yes' if col.col_name in pk_cols else 'No'
                     fk_reference = fk_info.get(col.col_name, 'No')
                     
-                    print("{:<{w[table]}} {:<{w[column]}} {:<{w[type]}} {:<{w[description]}} {:<{w[pk]}} {:<{w[fk]}}".format(
+                    writer.writerow([
                         table_name,
                         col.col_name,
                         col.data_type,
                         "No description available",
                         is_pk,
-                        fk_reference,
-                        w=col_widths
-                    ))
+                        fk_reference
+                    ])
             
-            print("-" * (sum(col_widths.values()) + 6))
+            # Add blank line between tables
+            writer.writerow([])
+        
+        # Print the output
+        print(output.getvalue())
                     
     except Exception as e:
         print(f"Error: {str(e)}")
+    finally:
+        output.close()
 
 if __name__ == "__main__":
-    generate_data_dictionary()
+    generate_word_friendly_dictionary()
