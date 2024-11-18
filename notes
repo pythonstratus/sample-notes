@@ -1,65 +1,68 @@
 from pyspark.sql import SparkSession
 import csv
-from io import StringIO
+import os
+from datetime import datetime
 
-def generate_word_friendly_dictionary():
+def generate_csv_dictionary():
     spark = SparkSession.builder.getOrCreate()
-    output = StringIO()
-    writer = csv.writer(output, delimiter='\t')
+    
+    # Create filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"data_dictionary_{timestamp}.csv"
     
     try:
-        # Write headers
-        writer.writerow(['Table Name', 'Column Name', 'Data Type', 'Description', 'Primary Key', 'Foreign Key'])
+        with open(filename, 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            
+            # Write headers
+            writer.writerow(['Table Name', 'Column Name', 'Data Type', 'Description', 'Primary Key', 'Foreign Key'])
+            
+            tables = spark.sql("SHOW TABLES FROM staging.bk_mpo").collect()
+            
+            for table in tables:
+                table_name = table.tableName
+                # Add table separator
+                writer.writerow(['=' * 20] * 6)
+                
+                columns = spark.sql(f"DESCRIBE staging.bk_mpo.{table_name}").collect()
+                
+                try:
+                    constraints = spark.sql(f"SHOW TBLPROPERTIES staging.bk_mpo.{table_name}").collect()
+                except:
+                    constraints = []
+                
+                pk_cols = set()
+                fk_info = {}
+                for prop in constraints:
+                    if 'pk' in prop.key.lower():
+                        pk_cols.update(prop.value.split(','))
+                    elif 'fk' in prop.key.lower():
+                        fk_parts = prop.value.split(':')
+                        if len(fk_parts) > 1:
+                            fk_info[fk_parts[0]] = f"References {fk_parts[1]}"
+                
+                for col in columns:
+                    if col.col_name and not col.col_name.startswith('#'):
+                        is_pk = 'Yes' if col.col_name in pk_cols else 'No'
+                        fk_reference = fk_info.get(col.col_name, 'No')
+                        
+                        writer.writerow([
+                            table_name,
+                            col.col_name,
+                            col.data_type,
+                            "No description available",
+                            is_pk,
+                            fk_reference
+                        ])
+                
+                # Add blank line between tables
+                writer.writerow([])
         
-        tables = spark.sql("SHOW TABLES FROM staging.bk_mpo").collect()
-        
-        for table in tables:
-            table_name = table.tableName
-            # Add table separator
-            writer.writerow(['=' * 100])
-            
-            columns = spark.sql(f"DESCRIBE staging.bk_mpo.{table_name}").collect()
-            
-            try:
-                constraints = spark.sql(f"SHOW TBLPROPERTIES staging.bk_mpo.{table_name}").collect()
-            except:
-                constraints = []
-            
-            # Extract key information
-            pk_cols = set()
-            fk_info = {}
-            for prop in constraints:
-                if 'pk' in prop.key.lower():
-                    pk_cols.update(prop.value.split(','))
-                elif 'fk' in prop.key.lower():
-                    fk_parts = prop.value.split(':')
-                    if len(fk_parts) > 1:
-                        fk_info[fk_parts[0]] = f"References {fk_parts[1]}"
-            
-            for col in columns:
-                if col.col_name and not col.col_name.startswith('#'):
-                    is_pk = 'Yes' if col.col_name in pk_cols else 'No'
-                    fk_reference = fk_info.get(col.col_name, 'No')
-                    
-                    writer.writerow([
-                        table_name,
-                        col.col_name,
-                        col.data_type,
-                        "No description available",
-                        is_pk,
-                        fk_reference
-                    ])
-            
-            # Add blank line between tables
-            writer.writerow([])
-        
-        # Print the output
-        print(output.getvalue())
+        print(f"CSV file has been created: {filename}")
+        print(f"You can now open this file directly in Microsoft Word or Excel.")
                     
     except Exception as e:
         print(f"Error: {str(e)}")
-    finally:
-        output.close()
 
 if __name__ == "__main__":
-    generate_word_friendly_dictionary()
+    generate_csv_dictionary()
