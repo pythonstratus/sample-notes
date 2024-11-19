@@ -1,100 +1,31 @@
-from pyspark.sql import SparkSession
-import csv
-from datetime import datetime
+Subject: Review Request - Database Migration Documentation & Supporting Tools
 
-def get_pipeline_inventory():
-    spark = SparkSession.builder.getOrCreate()
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"pipeline_inventory_{timestamp}.csv"
-    
-    try:
-        with open(filename, 'w', newline='') as csvfile:
-            writer = csv.writer(csvfile)
-            
-            # Write headers
-            writer.writerow([
-                'Pipeline Name',
-                'State',
-                'Created By',
-                'Created Time',
-                'Last Modified',
-                'Target Schema',
-                'Target Tables',
-                'Schedule',
-                'Latest Update Status'
-            ])
-            
-            # Query pipelines using DLT API
-            try:
-                pipelines = spark.sql("""
-                    SELECT *
-                    FROM system.pipelines
-                    WHERE target_schema LIKE '%staging.bk_mpo%'
-                    OR target_table LIKE '%staging.bk_mpo%'
-                """).collect()
-                
-                for pipeline in pipelines:
-                    writer.writerow([
-                        pipeline.pipeline_name,
-                        pipeline.state,
-                        pipeline.created_by,
-                        pipeline.creation_time,
-                        pipeline.last_modified,
-                        pipeline.target_schema,
-                        pipeline.target_table,
-                        pipeline.schedule,
-                        pipeline.latest_update_status
-                    ])
-                    
-            except Exception as e:
-                print(f"Error querying DLT pipelines: {str(e)}")
-            
-            # Try querying Jobs API for workflow information
-            try:
-                workflows = spark.sql("""
-                    SELECT *
-                    FROM system.jobs
-                    WHERE settings LIKE '%staging.bk_mpo%'
-                """).collect()
-                
-                writer.writerow([])
-                writer.writerow(['=== Workflow Jobs ==='])
-                writer.writerow([
-                    'Job Name',
-                    'Creator',
-                    'Created Time',
-                    'Last Modified',
-                    'Schedule',
-                    'State',
-                    'Latest Run Status'
-                ])
-                
-                for workflow in workflows:
-                    writer.writerow([
-                        workflow.job_name,
-                        workflow.creator_user_name,
-                        workflow.created_time,
-                        workflow.last_modified,
-                        workflow.schedule,
-                        workflow.state,
-                        workflow.latest_run_status
-                    ])
-                    
-            except Exception as e:
-                print(f"Error querying workflows: {str(e)}")
-        
-        print(f"\nPipeline inventory has been created: {filename}")
-        print("\nNote: If the file is empty, this could mean:")
-        print("1. No pipelines are currently configured for this schema")
-        print("2. You don't have permissions to view the pipeline information")
-        print("3. The pipelines might be configured in a different way")
-        print("\nYou might want to check:")
-        print("1. Delta Live Tables UI in Databricks")
-        print("2. Workflows UI in Databricks")
-        print("3. Job runs targeting this schema")
-                    
-    except Exception as e:
-        print(f"Error: {str(e)}")
+Hello Team,
 
-if __name__ == "__main__":
-    get_pipeline_inventory()
+I hope this email finds you well. I'm reaching out regarding the review of our Database Migration Documentation and associated Databricks tools.
+
+Key Documents for Review:
+1. Database Migration Documentation
+   - Migration strategy
+   - Technical specifications
+   - Data mapping details
+
+2. Supporting Databricks Notebooks:
+   - Table Inventory Generator
+   - Delta Table Properties Report
+   - Data Dictionary Generator
+   - Access Control List Report
+   - Pipeline Inventory Generator
+
+Each notebook provides detailed insights into our database structure and can be found in the following Databricks path:
+[Insert Databricks Path]
+
+Action Items:
+1. Review documentation for completeness and accuracy
+2. Test the automated reporting notebooks
+3. Provide feedback on additional metrics needed
+
+Please submit your review comments by [Insert Date].
+
+Best regards,
+[Your Name]
