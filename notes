@@ -6,3 +6,18 @@
 "Migration." Databricks Documentation, docs.databricks.com/en/migration/index.html.
 "Warehouse to Lakehouse Migration." Databricks Documentation, docs.databricks.com/en/migration/warehouse-to-lakehouse.html.
 "6 Migration Mistakes You Don't Want to Make, Part 1." Databricks Community, community.databricks.com/t5/technical-blog/6-migration-mistakes-you-don-t-want-to-make-part-1/ba-p/89199.
+
+
+
+Subject: Database Keys Implementation for Loan Tables
+
+Hello Team,
+
+I wanted to bring to your attention that our recently migrated loan tables from Postgres to Databricks currently don't have primary or foreign keys set up. While the tables are functioning, adding these keys would help optimize our queries and maintain clean data relationships between tables.
+
+The good news is we can implement these keys post-migration. I suggest we take some time to review our data structure and plan out the key relationships to enhance our database organization.
+
+Would you be available to discuss this implementation in our next team sync?
+
+Best regards,
+[Your name]
