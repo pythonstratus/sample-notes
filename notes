@@ -1,58 +1,12 @@
-# Databricks Environment Cleanup Plan - BK_MPO Project
-## Staging Environment
+Hi Team,
+I've prepared a documentation template for our upcoming database cleanup initiative in the BK_MPO staging environment. This cleanup aims to optimize our storage usage and improve environment maintenance.
+The document covers:
 
-### 1. Document Information
-**Author:** [Your Name]  
-**Date Created:** [Date]  
-**Project:** BK_MPO  
-**Environment:** Staging  
+Schemas and tables proposed for removal
+Test data cleanup plans
+Impact analysis
+Backup and rollback procedures
+Verification steps
 
-### 2. Purpose
-This document outlines the proposed cleanup of unused schemas, tables, and test data from the BK_MPO project's staging environment in Databricks to improve environment maintenance and reduce storage costs.
-
-### 3. Schemas to be Removed
-| Schema Name | Current Usage | Last Access Date | Size | Reason for Removal |
-|------------|---------------|------------------|------|-------------------|
-| | | | | |
-
-### 4. Tables to be Removed
-| Schema | Table Name | Current Usage | Last Access Date | Size | Dependencies | Reason for Removal |
-|--------|------------|---------------|------------------|------|--------------|-------------------|
-| | | | | | | |
-
-### 5. Test Data to be Cleaned
-| Schema | Table Name | Data Description | Data Volume | Retention Period | Reason for Removal |
-|--------|------------|------------------|--------------|-----------------|-------------------|
-| | | | | | |
-
-### 6. Impact Analysis
-- List any downstream processes or reports that might be affected
-- Identify any dependencies that need to be updated
-- Note any performance impacts
-
-### 7. Backup Plan
-- Describe backup strategy before cleanup
-- Specify backup retention period
-- Document backup location
-
-### 8. Execution Plan
-1. Proposed execution date and time
-2. Estimated duration
-3. Rollback procedure
-4. Verification steps
-
-### 9. Approvals Required
-| Role | Name | Approval Date | Comments |
-|------|------|---------------|----------|
-| Project Manager | | | |
-| Data Owner | | | |
-| Technical Lead | | | |
-| Security Team (if required) | | | |
-
-### 10. Post-Cleanup Verification
-- List of verification steps to ensure no negative impact
-- Performance metrics to be checked
-- User acceptance testing requirements
-
-### 11. Notes
-[Add any additional information or special considerations]
+Could you please review the attached template and provide feedback by [Date]? We'll incorporate your comments before proceeding with the final cleanup plan.
+The template is designed to ensure we have proper documentation and approvals in place before any modifications.
