@@ -1,136 +1,27 @@
-import psycopg2
-from typing import List, Dict
-import pandas as pd
+# PPAS 15 Cluster Testing Status
 
-def analyze_indexes(
-    host: str,
-    database: str,
-    user: str,
-    password: str,
-    schema: str = 'public'
-) -> pd.DataFrame:
-    """
-    Analyzes PostgreSQL indexes to identify potential primary and foreign keys.
-    """
-    conn = psycopg2.connect(
-        host=host,
-        database=database,
-        user=user,
-        password=password
-    )
-    
-    # Query to get all indexes in the schema
-    index_query = """
-    SELECT 
-        t.relname AS table_name,
-        i.relname AS index_name,
-        a.attname AS column_name,
-        ix.indisunique AS is_unique,
-        ix.indisprimary AS is_primary,
-        ix.indisvalid AS is_valid,
-        pg_get_indexdef(ix.indexrelid) AS index_definition
-    FROM 
-        pg_class t,
-        pg_class i,
-        pg_index ix,
-        pg_attribute a,
-        pg_namespace n
-    WHERE 
-        t.oid = ix.indrelid
-        AND i.oid = ix.indexrelid
-        AND a.attrelid = t.oid
-        AND a.attnum = ANY(ix.indkey)
-        AND t.relnamespace = n.oid
-        AND n.nspname = %s
-        AND t.relkind = 'r'
-    ORDER BY 
-        t.relname, i.relname;
-    """
-    
-    # Query to get column statistics
-    stats_query = """
-    SELECT 
-        schemaname,
-        tablename,
-        attname AS column_name,
-        null_frac,
-        n_distinct,
-        correlation
-    FROM 
-        pg_stats
-    WHERE 
-        schemaname = %s;
-    """
-    
-    try:
-        df_indexes = pd.read_sql_query(index_query, conn, params=[schema])
-        df_stats = pd.read_sql_query(stats_query, conn, params=[schema])
-        
-        # Analyze potential primary keys
-        potential_pks = df_indexes[
-            (df_indexes['is_unique'] == True) & 
-            (df_indexes['is_primary'] == False)
-        ].copy()
-        
-        # Analyze potential foreign keys
-        potential_fks = []
-        for _, idx_row in df_indexes.iterrows():
-            if not idx_row['is_primary']:
-                matching_indexes = df_indexes[
-                    (df_indexes['column_name'] == idx_row['column_name']) &
-                    (df_indexes['table_name'] != idx_row['table_name'])
-                ]
-                if not matching_indexes.empty:
-                    potential_fks.append({
-                        'source_table': idx_row['table_name'],
-                        'source_column': idx_row['column_name'],
-                        'potential_referenced_tables': matching_indexes['table_name'].tolist(),
-                        'index_name': idx_row['index_name']
-                    })
-        
-        df_potential_fks = pd.DataFrame(potential_fks)
-        
-        return {
-            'potential_pks': potential_pks,
-            'potential_fks': df_potential_fks,
-            'column_stats': df_stats
-        }
-        
-    finally:
-        conn.close()
+## Completed Validations
+- Schema comparison between legacy and new environments
+- Function validation across environments
 
-def generate_report(analysis_results: Dict) -> str:
-    """
-    Generates a markdown report from the analysis results.
-    """
-    report = []
-    
-    # Potential Primary Keys
-    report.append("## Potential Primary Keys")
-    for _, row in analysis_results['potential_pks'].iterrows():
-        report.append(f"\n### Table: {row['table_name']}")
-        report.append(f"- Index: {row['index_name']}")
-        report.append(f"- Column: {row['column_name']}")
-        report.append(f"- Definition: {row['index_definition']}")
-    
-    # Potential Foreign Keys
-    report.append("\n## Potential Foreign Keys")
-    for _, row in analysis_results['potential_fks'].iterrows():
-        report.append(f"\n### {row['source_table']}.{row['source_column']}")
-        report.append(f"- Could reference: {', '.join(row['potential_referenced_tables'])}")
-        report.append(f"- Index: {row['index_name']}")
-    
-    return "\n".join(report)
+## Current Blocker
+GoCD pipeline testing is blocked due to missing server variables in new environment.
 
-# Usage example
-if __name__ == "__main__":
-    results = analyze_indexes(
-        host="localhost",
-        database="your_database",
-        user="your_user",
-        password="your_password",
-        schema="your_schema"
-    )
-    
-    report = generate_report(results)
-    print(report)
+## Required Actions
+1. Identify all required server variables from existing GoCD pipelines
+2. Request variable configuration for new servers through appropriate channels
+3. Validate variable implementation before proceeding with pipeline testing
+
+## Next Steps
+1. Document all missing server variables
+2. Submit configuration request for new environment
+3. Verify variable implementation
+4. Proceed with GoCD pipeline validation once variables are configured
+
+## Dependencies
+- Server team availability for variable configuration
+- Access permissions for new environment
+- Variable validation process completion
+
+## Risk Mitigation
+Consider creating a temporary test environment with mock variables if server team availability becomes a bottleneck.
