@@ -1,23 +1,58 @@
-"Databricks Migration Strategy: Lessons Learned." Databricks, www.databricks.com/blog/databricks-migration-strategy-lessons-learned.
-"Data Migration." Databricks Glossary, www.databricks.com/glossary/data-migration.
-"Databricks Documentation." Databricks, www.databricks.com/databricks-documentation.
-"Ace Your Databricks Migration Strategy: Follow These 5 Steps." Medium, medium.com/@leaplogic/ace-your-databricks-migration-strategy-follow-these-5-steps-abab51c23e39.
-"Databricks Workspace Migration." Medium, medium.com/d-one/databricks-workspace-migration-ce450e3931da.
-"Migration." Databricks Documentation, docs.databricks.com/en/migration/index.html.
-"Warehouse to Lakehouse Migration." Databricks Documentation, docs.databricks.com/en/migration/warehouse-to-lakehouse.html.
-"6 Migration Mistakes You Don't Want to Make, Part 1." Databricks Community, community.databricks.com/t5/technical-blog/6-migration-mistakes-you-don-t-want-to-make-part-1/ba-p/89199.
+# Databricks Environment Cleanup Plan - BK_MPO Project
+## Staging Environment
 
+### 1. Document Information
+**Author:** [Your Name]  
+**Date Created:** [Date]  
+**Project:** BK_MPO  
+**Environment:** Staging  
 
+### 2. Purpose
+This document outlines the proposed cleanup of unused schemas, tables, and test data from the BK_MPO project's staging environment in Databricks to improve environment maintenance and reduce storage costs.
 
-Subject: Database Keys Implementation for Loan Tables
+### 3. Schemas to be Removed
+| Schema Name | Current Usage | Last Access Date | Size | Reason for Removal |
+|------------|---------------|------------------|------|-------------------|
+| | | | | |
 
-Hello Team,
+### 4. Tables to be Removed
+| Schema | Table Name | Current Usage | Last Access Date | Size | Dependencies | Reason for Removal |
+|--------|------------|---------------|------------------|------|--------------|-------------------|
+| | | | | | | |
 
-I wanted to bring to your attention that our recently migrated loan tables from Postgres to Databricks currently don't have primary or foreign keys set up. While the tables are functioning, adding these keys would help optimize our queries and maintain clean data relationships between tables.
+### 5. Test Data to be Cleaned
+| Schema | Table Name | Data Description | Data Volume | Retention Period | Reason for Removal |
+|--------|------------|------------------|--------------|-----------------|-------------------|
+| | | | | | |
 
-The good news is we can implement these keys post-migration. I suggest we take some time to review our data structure and plan out the key relationships to enhance our database organization.
+### 6. Impact Analysis
+- List any downstream processes or reports that might be affected
+- Identify any dependencies that need to be updated
+- Note any performance impacts
 
-Would you be available to discuss this implementation in our next team sync?
+### 7. Backup Plan
+- Describe backup strategy before cleanup
+- Specify backup retention period
+- Document backup location
 
-Best regards,
-[Your name]
+### 8. Execution Plan
+1. Proposed execution date and time
+2. Estimated duration
+3. Rollback procedure
+4. Verification steps
+
+### 9. Approvals Required
+| Role | Name | Approval Date | Comments |
+|------|------|---------------|----------|
+| Project Manager | | | |
+| Data Owner | | | |
+| Technical Lead | | | |
+| Security Team (if required) | | | |
+
+### 10. Post-Cleanup Verification
+- List of verification steps to ensure no negative impact
+- Performance metrics to be checked
+- User acceptance testing requirements
+
+### 11. Notes
+[Add any additional information or special considerations]
