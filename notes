@@ -1,27 +1,10 @@
-# PPAS 15 Cluster Testing Status
-
-## Completed Validations
-- Schema comparison between legacy and new environments
-- Function validation across environments
-
-## Current Blocker
-GoCD pipeline testing is blocked due to missing server variables in new environment.
-
-## Required Actions
-1. Identify all required server variables from existing GoCD pipelines
-2. Request variable configuration for new servers through appropriate channels
-3. Validate variable implementation before proceeding with pipeline testing
-
-## Next Steps
-1. Document all missing server variables
-2. Submit configuration request for new environment
-3. Verify variable implementation
-4. Proceed with GoCD pipeline validation once variables are configured
-
-## Dependencies
-- Server team availability for variable configuration
-- Access permissions for new environment
-- Variable validation process completion
-
-## Risk Mitigation
-Consider creating a temporary test environment with mock variables if server team availability becomes a bottleneck.
+CREATE TABLE new_table_name AS
+SELECT a.*,
+       c.namex AS "Contact Name",
+       e.event_id AS "Event ID",
+       en.namex AS "Entity Name"
+FROM sv3_ses.activity_update a
+LEFT JOIN sv3_ses.contact c ON a.contact = c.id
+LEFT JOIN sv3_ses.recordtype r ON a.recordtypeid = r.id
+LEFT JOIN sv3_rpt.exams e ON a.eventx = e.salesforce_event_id
+LEFT JOIN sv3_ses.account en ON a.entity = en.id;
