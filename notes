@@ -123,3 +123,29 @@ Please review the attached SQL scripts for:
 5. Document maintenance procedures
 
 ---
+
+Python vs Spark Execution
+
+
+Pure Python runs on driver node only
+Spark distributes processing across cluster
+PySpark combines both approaches
+
+
+Resource Usage Patterns
+
+
+Python: Single-node computation
+Spark: Distributed processing
+Memory utilization differences
+CPU usage patterns
+
+
+Cost Optimization Tips:
+
+
+Use Spark for large-scale data processing
+Use Python for light data manipulation
+Consider using Pandas on Spark for medium datasets
+Monitor memory usage on driver node
+Right-size clusters based on workload type
