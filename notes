@@ -1,79 +1,125 @@
-CREATE TABLE new_table_name AS
-SELECT a.*,
-       c.namex AS "Contact Name",
-       e.event_id AS "Event ID",
-       en.namex AS "Entity Name"
+# SV3 Activity Table Upsert Implementation Guide
+
+## Overview
+This document outlines the implementation of upsert operations for the `sv3_rpt.activity` and `sv3_rpt.activity_snapshot` tables. The process involves capturing activity data from multiple source tables including `sv3_ses.activity_update`, `sv3_ses.contact`, and `sv3_rpt.exams`.
+
+## Source Query Analysis
+The base query performs the following joins:
+- Links activity records with contact information
+- Associates record types
+- Connects exam data with Salesforce events
+- Maps to account entities
+
+```sql
+select a.*,
+       c.namex as "Contact Name",
+       e.event_id as "Event ID",
+       en.namex as "Entity Name"
+from sv3_ses.activity_update a
+LEFT JOIN sv3_ses.contact c on a.contact = c.id
+LEFT JOIN sv3_ses.recordtype r on a.recordtypeid = r.id
+LEFT JOIN sv3_rpt.exams e on a.eventx = e.salesforce_event_id
+LEFT JOIN sv3_ses.account en on a.entity = en.id
+```
+
+## Upsert Implementation
+
+### 1. Activity Table Upsert
+```sql
+INSERT INTO sv3_rpt.activity (
+    id,
+    contact_name,
+    event_id,
+    entity_name,
+    -- Add other relevant columns
+)
+SELECT 
+    a.*,
+    c.namex,
+    e.event_id,
+    en.namex
 FROM sv3_ses.activity_update a
-LEFT JOIN sv3_ses.contact c ON a.contact = c.id
-LEFT JOIN sv3_ses.recordtype r ON a.recordtypeid = r.id
-LEFT JOIN sv3_rpt.exams e ON a.eventx = e.salesforce_event_id
-LEFT JOIN sv3_ses.account en ON a.entity = en.id;
+LEFT JOIN sv3_ses.contact c on a.contact = c.id
+LEFT JOIN sv3_ses.recordtype r on a.recordtypeid = r.id
+LEFT JOIN sv3_rpt.exams e on a.eventx = e.salesforce_event_id
+LEFT JOIN sv3_ses.account en on a.entity = en.id
+ON CONFLICT (id) DO UPDATE
+SET
+    contact_name = EXCLUDED.contact_name,
+    event_id = EXCLUDED.event_id,
+    entity_name = EXCLUDED.entity_name,
+    updated_at = CURRENT_TIMESTAMP;
 
-
-
-
-CREATE TABLE AS (CTAS):
-
-Pros:
-- Independent data copy - source table changes don't affect it
-- Better query performance (no recomputation)
-- Can add indexes, constraints, and partitioning
-- More control over refresh timing
-
-Cons:
-- Takes more storage space
-- Manual maintenance required for updates
-- Data can become stale
-- Additional ETL processes needed
-
-MATERIALIZED VIEW:
-
-Pros:
-- Built-in refresh mechanisms
-- Easier maintenance
-- Automatic schema updates if source changes
-- Better space efficiency
-
-Cons:
-- Slower than direct table access
-- Can't add indexes or constraints
-- Refresh locks the entire view
-- All-or-nothing refresh (no incremental updates)
-
-Recommendation: Use CTAS if you need:
-- Complex indexing
-- Custom refresh logic
-- Full control over the data
-Use Materialized View if you need:
-- Simpler maintenance
-- Automatic schema alignment
-- Less storage overhead
-
-
-MV approach:
-
--- Create materialized view
-CREATE MATERIALIZED VIEW mv_contact_exam_activity AS 
-SELECT a.*,
-      c.namex AS "Contact Name",
-      e.event_id AS "Event ID",
-      en.namex AS "Entity Name"
+### 2. Activity Snapshot Table
+```sql
+INSERT INTO sv3_rpt.activity_snapshot (
+    activity_id,
+    contact_name,
+    event_id,
+    entity_name,
+    snapshot_date,
+    -- Add other relevant columns
+)
+SELECT 
+    a.*,
+    c.namex,
+    e.event_id,
+    en.namex,
+    CURRENT_DATE as snapshot_date
 FROM sv3_ses.activity_update a
-LEFT JOIN sv3_ses.contact c ON a.contact = c.id
-LEFT JOIN sv3_ses.recordtype r ON a.recordtypeid = r.id
-LEFT JOIN sv3_rpt.exams e ON a.eventx = e.salesforce_event_id
-LEFT JOIN sv3_ses.account en ON a.entity = en.id;
+LEFT JOIN sv3_ses.contact c on a.contact = c.id
+LEFT JOIN sv3_ses.recordtype r on a.recordtypeid = r.id
+LEFT JOIN sv3_rpt.exams e on a.eventx = e.salesforce_event_id
+LEFT JOIN sv3_ses.account en on a.entity = en.id
+ON CONFLICT (activity_id, snapshot_date) DO UPDATE
+SET
+    contact_name = EXCLUDED.contact_name,
+    event_id = EXCLUDED.event_id,
+    entity_name = EXCLUDED.entity_name,
+    updated_at = CURRENT_TIMESTAMP;
+```
 
--- Refresh command
-REFRESH MATERIALIZED VIEW mv_contact_exam_activity;
+## Implementation Notes
 
--- Create index (optional, for better query performance)
-CREATE INDEX idx_mv_contact_exam_activity_id ON mv_contact_exam_activity(id);
+1. **Primary Keys**:
+   - `activity` table uses `id` as the primary key
+   - `activity_snapshot` table uses composite key (`activity_id`, `snapshot_date`)
 
--- Grant permissions
-GRANT SELECT ON mv_contact_exam_activity TO your_user_role;
+2. **Data Types**:
+   - Ensure all column data types match between source and target tables
+   - Consider using appropriate indexes for join columns
 
+3. **Error Handling**:
+   - Implement error logging for failed upserts
+   - Consider adding constraints to prevent invalid data
 
+4. **Performance Considerations**:
+   - Run upserts during off-peak hours
+   - Consider batching for large datasets
+   - Monitor execution time and resource usage
 
-Refresh scheduling with cron job example:
-bashCopy0 */4 * * * psql -d yourdb -c "REFRESH MATERIALIZED VIEW mv_contact_exam_activity;"
+## Validation Steps
+
+1. Compare record counts between source and target tables
+2. Verify data integrity after upsert
+3. Check for any orphaned records
+4. Validate snapshot date tracking
+5. Review error logs for any failed operations
+
+## Review Process
+Please review the attached SQL scripts for:
+- Correct table and column names
+- Join conditions
+- Conflict resolution logic
+- Data type compatibility
+- Index usage
+- Error handling implementation
+
+## Next Steps
+1. Test scripts in development environment
+2. Review execution plans
+3. Schedule production deployment
+4. Set up monitoring
+5. Document maintenance procedures
+
+---
