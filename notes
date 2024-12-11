@@ -1,28 +1,21 @@
--- First, get a list of all tables in the schema and generate DROP TABLE statements
-WITH table_list AS (
-  SHOW TABLES IN your_schema_name
-)
-SELECT CONCAT('DROP TABLE ', database, '.', tableName, ';') as drop_statement
-FROM table_list;
-
--- After getting the list of DROP statements above, execute them one by one
--- Then finally drop the schema:
-DROP SCHEMA your_schema_name;
-
-
------- Python -------
-
 schema_name = "your_schema_name"  # Replace with your schema name
 
-# Get all tables in the schema
+# Step 1: Drop all tables
 tables_df = spark.sql(f"SHOW TABLES IN {schema_name}")
-
-# Drop each table
 for row in tables_df.collect():
     table_name = row.tableName
     print(f"Dropping table: {schema_name}.{table_name}")
     spark.sql(f"DROP TABLE IF EXISTS {schema_name}.{table_name}")
 
-# Now drop the empty schema
+# Step 2: Drop all volumes
+volumes_df = spark.sql(f"SHOW VOLUMES IN {schema_name}")
+for row in volumes_df.collect():
+    volume_name = row.volumeName
+    print(f"Dropping volume: {schema_name}.{volume_name}")
+    spark.sql(f"DROP VOLUME IF EXISTS {schema_name}.{volume_name}")
+
+# Step 3: Finally drop the schema
 print(f"Dropping schema: {schema_name}")
 spark.sql(f"DROP SCHEMA IF EXISTS {schema_name}")
+
+print("Cleanup complete!")
