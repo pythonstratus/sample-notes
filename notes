@@ -9,8 +9,18 @@ for row in tables_df.collect():
 
 # Step 2: Drop all volumes
 volumes_df = spark.sql(f"SHOW VOLUMES IN {schema_name}")
+# Let's first print the schema to see the correct column names
+print("Volume DataFrame Schema:")
+volumes_df.printSchema()
+
+# Print the first few rows to inspect the data
+print("\nVolume DataFrame Content:")
+volumes_df.show()
+
+# Now drop each volume
 for row in volumes_df.collect():
-    volume_name = row.volumeName
+    # We'll use the first column assuming it contains the volume name
+    volume_name = row[0]  # Or adjust based on the actual column name from printSchema
     print(f"Dropping volume: {schema_name}.{volume_name}")
     spark.sql(f"DROP VOLUME IF EXISTS {schema_name}.{volume_name}")
 
