@@ -1,6 +1,7 @@
-schema_name = "your_schema_name"  # Replace with your schema name
+schema_name = "staging.bk_mpo_raw_test"  # Include the full schema name including 'staging'
 
 # Step 1: Drop all tables
+print("Step 1: Dropping tables...")
 tables_df = spark.sql(f"SHOW TABLES IN {schema_name}")
 for row in tables_df.collect():
     table_name = row.tableName
@@ -8,24 +9,16 @@ for row in tables_df.collect():
     spark.sql(f"DROP TABLE IF EXISTS {schema_name}.{table_name}")
 
 # Step 2: Drop all volumes
+print("\nStep 2: Dropping volumes...")
 volumes_df = spark.sql(f"SHOW VOLUMES IN {schema_name}")
-# Let's first print the schema to see the correct column names
-print("Volume DataFrame Schema:")
-volumes_df.printSchema()
-
-# Print the first few rows to inspect the data
-print("\nVolume DataFrame Content:")
-volumes_df.show()
-
-# Now drop each volume
 for row in volumes_df.collect():
-    # We'll use the first column assuming it contains the volume name
-    volume_name = row[0]  # Or adjust based on the actual column name from printSchema
-    print(f"Dropping volume: {schema_name}.{volume_name}")
-    spark.sql(f"DROP VOLUME IF EXISTS {schema_name}.{volume_name}")
+    db = row.database
+    vol_name = row.volume_name
+    print(f"Dropping volume: {db}.{vol_name}")
+    spark.sql(f"DROP VOLUME IF EXISTS {db}.{vol_name}")
 
-# Step 3: Finally drop the schema
-print(f"Dropping schema: {schema_name}")
+# Step 3: Drop the schema
+print(f"\nStep 3: Dropping schema: {schema_name}")
 spark.sql(f"DROP SCHEMA IF EXISTS {schema_name}")
 
 print("Cleanup complete!")
