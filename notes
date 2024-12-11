@@ -1,24 +1,223 @@
-schema_name = "staging.bk_mpo_raw_test"  # Include the full schema name including 'staging'
+# Databricks notebook source
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+import pandas as pd
+from datetime import datetime
 
-# Step 1: Drop all tables
-print("Step 1: Dropping tables...")
-tables_df = spark.sql(f"SHOW TABLES IN {schema_name}")
-for row in tables_df.collect():
-    table_name = row.tableName
-    print(f"Dropping table: {schema_name}.{table_name}")
-    spark.sql(f"DROP TABLE IF EXISTS {schema_name}.{table_name}")
+# COMMAND ----------
+# Get all the data first
+def collect_audit_data():
+    schemas_df = spark.sql("SHOW DATABASES")
+    
+    all_tables = []
+    all_privileges = []
+    
+    for schema in schemas_df.select("databaseName").collect():
+        schema_name = schema.databaseName
+        # Get tables
+        try:
+            tables_df = spark.sql(f"SHOW TABLES IN {schema_name}")
+            all_tables.append({"schema": schema_name, "tables": tables_df})
+        except Exception as e:
+            print(f"Error getting tables for {schema_name}: {str(e)}")
+            
+        # Get privileges
+        try:
+            privileges_df = spark.sql(f"SHOW GRANT ON SCHEMA {schema_name}")
+            all_privileges.append({"schema": schema_name, "privileges": privileges_df})
+        except Exception as e:
+            print(f"Error getting privileges for {schema_name}: {str(e)}")
+            
+    return schemas_df, all_tables, all_privileges
 
-# Step 2: Drop all volumes
-print("\nStep 2: Dropping volumes...")
-volumes_df = spark.sql(f"SHOW VOLUMES IN {schema_name}")
-for row in volumes_df.collect():
-    db = row.database
-    vol_name = row.volume_name
-    print(f"Dropping volume: {db}.{vol_name}")
-    spark.sql(f"DROP VOLUME IF EXISTS {db}.{vol_name}")
+# COMMAND ----------
+schemas_df, all_tables, all_privileges = collect_audit_data()
 
-# Step 3: Drop the schema
-print(f"\nStep 3: Dropping schema: {schema_name}")
-spark.sql(f"DROP SCHEMA IF EXISTS {schema_name}")
+# COMMAND ----------
+# Generate HTML report
+def generate_html_report(schemas_df, all_tables, all_privileges):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    html = f"""
+    <html>
+    <head>
+        <style>
+            .report-container {{
+                font-family: 'Helvetica Neue', Arial, sans-serif;
+                max-width: 1200px;
+                margin: 20px auto;
+                padding: 20px;
+            }}
+            .header {{
+                background: #1976D2;
+                color: white;
+                padding: 20px;
+                border-radius: 8px;
+                margin-bottom: 20px;
+            }}
+            .section {{
+                background: white;
+                padding: 20px;
+                margin-bottom: 20px;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }}
+            .schema-card {{
+                border: 1px solid #ddd;
+                margin: 10px 0;
+                padding: 15px;
+                border-radius: 4px;
+            }}
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+                margin: 10px 0;
+            }}
+            th, td {{
+                padding: 12px;
+                text-align: left;
+                border-bottom: 1px solid #ddd;
+            }}
+            th {{
+                background-color: #f5f5f5;
+            }}
+            .metric {{
+                display: inline-block;
+                padding: 15px;
+                background: #f8f9fa;
+                border-radius: 4px;
+                margin: 5px;
+                min-width: 200px;
+            }}
+            .toggle-btn {{
+                background: #2196F3;
+                color: white;
+                border: none;
+                padding: 8px 15px;
+                border-radius: 4px;
+                cursor: pointer;
+                margin: 5px;
+            }}
+            .toggle-btn:hover {{
+                background: #1976D2;
+            }}
+            .hidden {{
+                display: none;
+            }}
+        </style>
+        <script>
+            function toggleSection(elementId) {{
+                var element = document.getElementById(elementId);
+                if (element.classList.contains('hidden')) {{
+                    element.classList.remove('hidden');
+                }} else {{
+                    element.classList.add('hidden');
+                }}
+            }}
+        </script>
+    </head>
+    <body>
+        <div class="report-container">
+            <div class="header">
+                <h1>Databricks Schema Audit Report</h1>
+                <p>Generated on: {timestamp}</p>
+            </div>
+            
+            <div class="section">
+                <h2>Summary Metrics</h2>
+                <div class="metric">
+                    <strong>Total Schemas:</strong> {schemas_df.count()}
+                </div>
+                <div class="metric">
+                    <strong>Total Tables:</strong> {sum([tables["tables"].count() for tables in all_tables])}
+                </div>
+            </div>
+    """
+    
+    # Add Schemas Section
+    html += """
+            <div class="section">
+                <h2>Schema Details</h2>
+    """
+    
+    for schema in schemas_df.collect():
+        schema_name = schema.databaseName
+        
+        # Find tables for this schema
+        schema_tables = next((t["tables"] for t in all_tables if t["schema"] == schema_name), None)
+        table_count = schema_tables.count() if schema_tables is not None else 0
+        
+        # Find privileges for this schema
+        schema_privileges = next((p["privileges"] for p in all_privileges if p["schema"] == schema_name), None)
+        
+        html += f"""
+            <div class="schema-card">
+                <h3>{schema_name}</h3>
+                <button class="toggle-btn" onclick="toggleSection('{schema_name}-tables')">
+                    Toggle Tables ({table_count})
+                </button>
+                <button class="toggle-btn" onclick="toggleSection('{schema_name}-privileges')">
+                    Toggle Privileges
+                </button>
+                
+                <div id="{schema_name}-tables" class="hidden">
+                    <h4>Tables:</h4>
+                    <table>
+                        <tr>
+                            <th>Table Name</th>
+                            <th>Type</th>
+                        </tr>
+        """
+        
+        if schema_tables is not None:
+            for table in schema_tables.collect():
+                html += f"""
+                    <tr>
+                        <td>{table.tableName}</td>
+                        <td>{table.tableType}</td>
+                    </tr>
+                """
+                
+        html += """
+                    </table>
+                </div>
+        """
+        
+        html += f"""
+                <div id="{schema_name}-privileges" class="hidden">
+                    <h4>Privileges:</h4>
+                    <table>
+                        <tr>
+                            <th>Principal</th>
+                            <th>Action</th>
+                        </tr>
+        """
+        
+        if schema_privileges is not None:
+            for priv in schema_privileges.collect():
+                html += f"""
+                    <tr>
+                        <td>{priv.principal}</td>
+                        <td>{priv.actionType}</td>
+                    </tr>
+                """
+                
+        html += """
+                    </table>
+                </div>
+            </div>
+        """
+    
+    html += """
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    return html
 
-print("Cleanup complete!")
+# COMMAND ----------
+# Display the report
+html_report = generate_html_report(schemas_df, all_tables, all_privileges)
+displayHTML(html_report)
