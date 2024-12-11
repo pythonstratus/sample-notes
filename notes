@@ -1,38 +1,34 @@
 -- Safety check: Enable cascading drops
 SET spark.sql.legacy.allowNonEmptyLocationInTruncate = true;
 
--- Function to get all tables in a schema
-CREATE OR REPLACE FUNCTION get_tables_in_schema(schema_name STRING)
-RETURNS TABLE (table_name STRING)
-RETURN
-  SELECT table_name 
-  FROM information_schema.tables 
-  WHERE table_schema = schema_name;
+-- Get list of all tables in the schema
+-- Replace 'your_schema_name' with your actual schema name
+SHOW TABLES IN your_schema_name;
 
--- Procedure to drop all tables in a schema
-CREATE OR REPLACE PROCEDURE drop_schema_contents(schema_name STRING)
-LANGUAGE SQL
-AS
-BEGIN
-  -- Get list of all tables in the schema
-  FOR table_record IN (SELECT * FROM get_tables_in_schema(schema_name))
-  DO
-    -- Drop each table
-    EXECUTE IMMEDIATE 'DROP TABLE IF EXISTS ' || schema_name || '.' || table_record.table_name || ' CASCADE';
-  END FOR;
-END;
+-- Drop all tables in the schema
+-- You'll need to replace 'your_schema_name' and run this for each table from the SHOW TABLES result
+DROP TABLE IF EXISTS your_schema_name.table_name CASCADE;
 
--- Main cleanup script
--- Replace 'your_schema_name' with actual schema name
-DECLARE @schema_name STRING = 'your_schema_name';
+-- Drop the schema itself
+DROP SCHEMA IF EXISTS your_schema_name CASCADE;
 
--- Drop all tables first
-CALL drop_schema_contents(@schema_name);
+-- Verify schema is dropped
+SHOW SCHEMAS LIKE 'your_schema_name';
 
--- Finally drop the schema itself
-EXECUTE IMMEDIATE 'DROP SCHEMA IF EXISTS ' || @schema_name || ' CASCADE';
 
--- Verification query
-SELECT SCHEMA_NAME 
-FROM information_schema.schemata 
-WHERE SCHEMA_NAME = @schema_name;
+---- Python Version ----
+
+
+# Get the schema name
+schema_name = "your_schema_name"
+
+# Get list of all tables in the schema
+tables = spark.sql(f"SHOW TABLES IN {schema_name}").select("tableName").collect()
+
+# Drop each table
+for table in tables:
+    table_name = table.tableName
+    spark.sql(f"DROP TABLE IF EXISTS {schema_name}.{table_name} CASCADE")
+
+# Drop the schema
+spark.sql(f"DROP SCHEMA IF EXISTS {schema_name} CASCADE")
