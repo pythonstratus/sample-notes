@@ -1,151 +1,38 @@
-# SV3 Activity Table Upsert Implementation Guide
+-- Safety check: Enable cascading drops
+SET spark.sql.legacy.allowNonEmptyLocationInTruncate = true;
 
-## Overview
-This document outlines the implementation of upsert operations for the `sv3_rpt.activity` and `sv3_rpt.activity_snapshot` tables. The process involves capturing activity data from multiple source tables including `sv3_ses.activity_update`, `sv3_ses.contact`, and `sv3_rpt.exams`.
+-- Function to get all tables in a schema
+CREATE OR REPLACE FUNCTION get_tables_in_schema(schema_name STRING)
+RETURNS TABLE (table_name STRING)
+RETURN
+  SELECT table_name 
+  FROM information_schema.tables 
+  WHERE table_schema = schema_name;
 
-## Source Query Analysis
-The base query performs the following joins:
-- Links activity records with contact information
-- Associates record types
-- Connects exam data with Salesforce events
-- Maps to account entities
+-- Procedure to drop all tables in a schema
+CREATE OR REPLACE PROCEDURE drop_schema_contents(schema_name STRING)
+LANGUAGE SQL
+AS
+BEGIN
+  -- Get list of all tables in the schema
+  FOR table_record IN (SELECT * FROM get_tables_in_schema(schema_name))
+  DO
+    -- Drop each table
+    EXECUTE IMMEDIATE 'DROP TABLE IF EXISTS ' || schema_name || '.' || table_record.table_name || ' CASCADE';
+  END FOR;
+END;
 
-```sql
-select a.*,
-       c.namex as "Contact Name",
-       e.event_id as "Event ID",
-       en.namex as "Entity Name"
-from sv3_ses.activity_update a
-LEFT JOIN sv3_ses.contact c on a.contact = c.id
-LEFT JOIN sv3_ses.recordtype r on a.recordtypeid = r.id
-LEFT JOIN sv3_rpt.exams e on a.eventx = e.salesforce_event_id
-LEFT JOIN sv3_ses.account en on a.entity = en.id
-```
+-- Main cleanup script
+-- Replace 'your_schema_name' with actual schema name
+DECLARE @schema_name STRING = 'your_schema_name';
 
-## Upsert Implementation
+-- Drop all tables first
+CALL drop_schema_contents(@schema_name);
 
-### 1. Activity Table Upsert
-```sql
-INSERT INTO sv3_rpt.activity (
-    id,
-    contact_name,
-    event_id,
-    entity_name,
-    -- Add other relevant columns
-)
-SELECT 
-    a.*,
-    c.namex,
-    e.event_id,
-    en.namex
-FROM sv3_ses.activity_update a
-LEFT JOIN sv3_ses.contact c on a.contact = c.id
-LEFT JOIN sv3_ses.recordtype r on a.recordtypeid = r.id
-LEFT JOIN sv3_rpt.exams e on a.eventx = e.salesforce_event_id
-LEFT JOIN sv3_ses.account en on a.entity = en.id
-ON CONFLICT (id) DO UPDATE
-SET
-    contact_name = EXCLUDED.contact_name,
-    event_id = EXCLUDED.event_id,
-    entity_name = EXCLUDED.entity_name,
-    updated_at = CURRENT_TIMESTAMP;
+-- Finally drop the schema itself
+EXECUTE IMMEDIATE 'DROP SCHEMA IF EXISTS ' || @schema_name || ' CASCADE';
 
-### 2. Activity Snapshot Table
-```sql
-INSERT INTO sv3_rpt.activity_snapshot (
-    activity_id,
-    contact_name,
-    event_id,
-    entity_name,
-    snapshot_date,
-    -- Add other relevant columns
-)
-SELECT 
-    a.*,
-    c.namex,
-    e.event_id,
-    en.namex,
-    CURRENT_DATE as snapshot_date
-FROM sv3_ses.activity_update a
-LEFT JOIN sv3_ses.contact c on a.contact = c.id
-LEFT JOIN sv3_ses.recordtype r on a.recordtypeid = r.id
-LEFT JOIN sv3_rpt.exams e on a.eventx = e.salesforce_event_id
-LEFT JOIN sv3_ses.account en on a.entity = en.id
-ON CONFLICT (activity_id, snapshot_date) DO UPDATE
-SET
-    contact_name = EXCLUDED.contact_name,
-    event_id = EXCLUDED.event_id,
-    entity_name = EXCLUDED.entity_name,
-    updated_at = CURRENT_TIMESTAMP;
-```
-
-## Implementation Notes
-
-1. **Primary Keys**:
-   - `activity` table uses `id` as the primary key
-   - `activity_snapshot` table uses composite key (`activity_id`, `snapshot_date`)
-
-2. **Data Types**:
-   - Ensure all column data types match between source and target tables
-   - Consider using appropriate indexes for join columns
-
-3. **Error Handling**:
-   - Implement error logging for failed upserts
-   - Consider adding constraints to prevent invalid data
-
-4. **Performance Considerations**:
-   - Run upserts during off-peak hours
-   - Consider batching for large datasets
-   - Monitor execution time and resource usage
-
-## Validation Steps
-
-1. Compare record counts between source and target tables
-2. Verify data integrity after upsert
-3. Check for any orphaned records
-4. Validate snapshot date tracking
-5. Review error logs for any failed operations
-
-## Review Process
-Please review the attached SQL scripts for:
-- Correct table and column names
-- Join conditions
-- Conflict resolution logic
-- Data type compatibility
-- Index usage
-- Error handling implementation
-
-## Next Steps
-1. Test scripts in development environment
-2. Review execution plans
-3. Schedule production deployment
-4. Set up monitoring
-5. Document maintenance procedures
-
----
-
-Python vs Spark Execution
-
-
-Pure Python runs on driver node only
-Spark distributes processing across cluster
-PySpark combines both approaches
-
-
-Resource Usage Patterns
-
-
-Python: Single-node computation
-Spark: Distributed processing
-Memory utilization differences
-CPU usage patterns
-
-
-Cost Optimization Tips:
-
-
-Use Spark for large-scale data processing
-Use Python for light data manipulation
-Consider using Pandas on Spark for medium datasets
-Monitor memory usage on driver node
-Right-size clusters based on workload type
+-- Verification query
+SELECT SCHEMA_NAME 
+FROM information_schema.schemata 
+WHERE SCHEMA_NAME = @schema_name;
