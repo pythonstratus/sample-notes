@@ -1,34 +1,28 @@
--- Safety check: Enable cascading drops
-SET spark.sql.legacy.allowNonEmptyLocationInTruncate = true;
+-- First, get a list of all tables in the schema and generate DROP TABLE statements
+WITH table_list AS (
+  SHOW TABLES IN your_schema_name
+)
+SELECT CONCAT('DROP TABLE ', database, '.', tableName, ';') as drop_statement
+FROM table_list;
 
--- Get list of all tables in the schema
--- Replace 'your_schema_name' with your actual schema name
-SHOW TABLES IN your_schema_name;
-
--- Drop all tables in the schema
--- You'll need to replace 'your_schema_name' and run this for each table from the SHOW TABLES result
-DROP TABLE IF EXISTS your_schema_name.table_name CASCADE;
-
--- Drop the schema itself
-DROP SCHEMA IF EXISTS your_schema_name CASCADE;
-
--- Verify schema is dropped
-SHOW SCHEMAS LIKE 'your_schema_name';
+-- After getting the list of DROP statements above, execute them one by one
+-- Then finally drop the schema:
+DROP SCHEMA your_schema_name;
 
 
----- Python Version ----
+------ Python -------
 
+schema_name = "your_schema_name"  # Replace with your schema name
 
-# Get the schema name
-schema_name = "your_schema_name"
-
-# Get list of all tables in the schema
-tables = spark.sql(f"SHOW TABLES IN {schema_name}").select("tableName").collect()
+# Get all tables in the schema
+tables_df = spark.sql(f"SHOW TABLES IN {schema_name}")
 
 # Drop each table
-for table in tables:
-    table_name = table.tableName
-    spark.sql(f"DROP TABLE IF EXISTS {schema_name}.{table_name} CASCADE")
+for row in tables_df.collect():
+    table_name = row.tableName
+    print(f"Dropping table: {schema_name}.{table_name}")
+    spark.sql(f"DROP TABLE IF EXISTS {schema_name}.{table_name}")
 
-# Drop the schema
-spark.sql(f"DROP SCHEMA IF EXISTS {schema_name} CASCADE")
+# Now drop the empty schema
+print(f"Dropping schema: {schema_name}")
+spark.sql(f"DROP SCHEMA IF EXISTS {schema_name}")
