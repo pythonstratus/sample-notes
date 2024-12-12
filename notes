@@ -1,76 +1,32 @@
-def analyze_indexes(
-    host: str,
-    database: str,
-    user: str,
-    password: str,
-    port: int = 5432,
-    schema: str = 'public'
-) -> Dict:
-    """
-    Analyzes PostgreSQL indexes and column properties to identify potential primary and foreign keys.
-    """
-    import psycopg2.extensions
-    psycopg2.extensions.register_type(psycopg2.extensions.UNICODE)
-    psycopg2.extensions.register_type(psycopg2.extensions.UNICODEARRAY)
-    
-    conn = psycopg2.connect(
-        host=host,
-        database=database,
-        user=user,
-        password=password,
-        port=port
-    )
-    
-    conn.set_client_encoding('UTF8')
-    
-    try:
-        df_indexes = pd.read_sql_query(index_query, conn, params=[schema])
-        df_stats = pd.read_sql_query(stats_query, conn, params=[schema])
-        df_counts = pd.read_sql_query(count_query, conn, params=[schema])
-        
-        # Analyze potential primary keys with enhanced criteria
-        potential_pks = []
-        for _, idx_row in df_indexes.iterrows():
-            if not idx_row['is_primary']:
-                # Get statistics for this column - safely handle empty results
-                stats_mask = (
-                    (df_stats['tablename'] == idx_row['table_name']) &
-                    (df_stats['column_name'] == idx_row['column_name'])
-                )
-                stats = df_stats[stats_mask].iloc[0] if not df_stats[stats_mask].empty else None
-                
-                # Get row count for the table - safely handle empty results
-                count_mask = df_counts['table_name'] == idx_row['table_name']
-                row_count = df_counts[count_mask]['row_count'].iloc[0] if not df_counts[count_mask].empty else 0
-                
-                pk_score = calculate_pk_score(
-                    is_unique=idx_row['is_unique'],
-                    not_null=idx_row['not_null'],
-                    data_type=idx_row['data_type'],
-                    null_frac=stats['null_frac'] if stats is not None else None,
-                    n_distinct=stats['n_distinct'] if stats is not None else None,
-                    row_count=row_count,
-                    constraint_count=idx_row['constraint_count']
-                )
-                
-                if pk_score > 0.7:  # Threshold for considering as PK
-                    potential_pks.append({
-                        'table_name': idx_row['table_name'],
-                        'column_name': idx_row['column_name'],
-                        'index_name': idx_row['index_name'],
-                        'data_type': idx_row['data_type'],
-                        'pk_score': pk_score,
-                        'index_definition': idx_row['index_definition'],
-                        'recommendations': generate_pk_recommendations(idx_row, stats)
-                    })
-        
-        # Rest of your code remains the same...
-        
-        return {
-            'potential_pks': pd.DataFrame(potential_pks) if potential_pks else pd.DataFrame(),
-            'potential_fks': pd.DataFrame(potential_fks) if 'potential_fks' in locals() else pd.DataFrame(),
-            'column_stats': df_stats
-        }
-        
-    finally:
-        conn.close()
+I'll explain how the confidence (PK) score is calculated in the script. The score ranges from 0 to 1 (or 0-100%), where higher scores indicate better PK candidates. Here's how the scoring breaks down:
+
+1. Uniqueness (40% of score):
+   - If column has a unique constraint: +0.4 
+   - This is the most important factor since PKs must be unique
+
+2. NOT NULL constraint (20% of score):
+   - If column has NOT NULL constraint: +0.2
+   - Second most important since PKs shouldn't allow nulls
+
+3. Appropriate Data Type (10% of score):
+   - If column is INTEGER, BIGINT, or UUID: +0.1
+   - These types are optimal for PKs
+
+4. Null Fraction (10% of score):
+   - If column has zero nulls: +0.1
+   - Checks actual data, not just constraints
+
+5. Distinct Value Ratio (10% of score):
+   - If >99% of values are unique: +0.1
+   - Validates uniqueness in actual data
+
+6. Existing Constraints (10% of score):
+   - If column has other constraints: +0.1
+   - Indicates column's importance
+
+The script considers columns scoring above 0.7 (70%) as good PK candidates. So for example:
+- A unique, NOT NULL, integer column would score 0.7 (0.4 + 0.2 + 0.1)
+- A unique column with nulls would only score 0.4
+- A perfect candidate would score 1.0
+
+Would you like me to add this explanation to the report output to make the scores more meaningful to users?
