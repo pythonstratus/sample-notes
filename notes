@@ -1,32 +1,84 @@
-I'll explain how the confidence (PK) score is calculated in the script. The score ranges from 0 to 1 (or 0-100%), where higher scores indicate better PK candidates. Here's how the scoring breaks down:
+def generate_report(analysis_results: Dict, include_score_explanation: bool = True) -> str:
+    """
+    Generates a detailed markdown report from the analysis results.
+    """
+    report = []
+    
+    # Add report header
+    report.append("# Database Key Analysis Report\n")
+    
+    # Add scoring explanation if requested
+    if include_score_explanation:
+        report.append("## Confidence Score Explanation")
+        report.append("The confidence score (0-100%) is calculated based on the following criteria:")
+        report.append("1. Uniqueness (40%): Column has unique constraint")
+        report.append("2. NOT NULL constraint (20%): Column doesn't allow nulls")
+        report.append("3. Data Type (10%): Column is INTEGER, BIGINT, or UUID")
+        report.append("4. Null Fraction (10%): No null values in actual data")
+        report.append("5. Distinct Values (10%): >99% values are unique")
+        report.append("6. Existing Constraints (10%): Column has other constraints\n")
+        report.append("Scores above 70% indicate good candidates for primary keys.\n")
+    
+    # Potential Primary Keys
+    report.append("## Potential Primary Keys")
+    
+    if not analysis_results['potential_pks'].empty:
+        for _, row in analysis_results['potential_pks'].iterrows():
+            report.append(f"\n### Table: {row['table_name']}")
+            report.append(f"- Column: {row['column_name']}")
+            report.append(f"- Confidence Score: {row['pk_score']:.2%}")
+            report.append(f"- Data Type: {row['data_type']}")
+            report.append(f"- Current Index: {row['index_name']}")
+            if row['recommendations']:
+                report.append("- Recommendations:")
+                for rec in row['recommendations']:
+                    report.append(f"  * {rec}")
+    else:
+        report.append("\nNo potential primary keys identified.")
+    
+    # Potential Foreign Keys
+    report.append("\n## Potential Foreign Keys")
+    
+    if not analysis_results['potential_fks'].empty:
+        for _, row in analysis_results['potential_fks'].iterrows():
+            report.append(f"\n### {row['source_table']}.{row['source_column']}")
+            report.append(f"- Confidence Score: {row['fk_score']:.2%}")
+            report.append(f"- Data Type: {row['data_type']}")
+            report.append(f"- Could reference: {', '.join(row['potential_referenced_tables'])}")
+            if row['recommendations']:
+                report.append("- Recommendations:")
+                for rec in row['recommendations']:
+                    report.append(f"  * {rec}")
+    else:
+        report.append("\nNo potential foreign keys identified.")
+    
+    return "\n".join(report)
 
-1. Uniqueness (40% of score):
-   - If column has a unique constraint: +0.4 
-   - This is the most important factor since PKs must be unique
+def save_report_to_file(report: str, filename: str) -> None:
+    """
+    Saves the report to a text file.
+    """
+    with open(filename, 'w', encoding='utf-8') as f:
+        f.write(report)
 
-2. NOT NULL constraint (20% of score):
-   - If column has NOT NULL constraint: +0.2
-   - Second most important since PKs shouldn't allow nulls
-
-3. Appropriate Data Type (10% of score):
-   - If column is INTEGER, BIGINT, or UUID: +0.1
-   - These types are optimal for PKs
-
-4. Null Fraction (10% of score):
-   - If column has zero nulls: +0.1
-   - Checks actual data, not just constraints
-
-5. Distinct Value Ratio (10% of score):
-   - If >99% of values are unique: +0.1
-   - Validates uniqueness in actual data
-
-6. Existing Constraints (10% of score):
-   - If column has other constraints: +0.1
-   - Indicates column's importance
-
-The script considers columns scoring above 0.7 (70%) as good PK candidates. So for example:
-- A unique, NOT NULL, integer column would score 0.7 (0.4 + 0.2 + 0.1)
-- A unique column with nulls would only score 0.4
-- A perfect candidate would score 1.0
-
-Would you like me to add this explanation to the report output to make the scores more meaningful to users?
+# Usage example
+if __name__ == "__main__":
+    results = analyze_indexes(
+        host="localhost",
+        database="your_database",
+        user="your_user",
+        password="your_password",
+        port=5432,
+        schema="your_schema"
+    )
+    
+    # Generate report with score explanation
+    report = generate_report(results, include_score_explanation=True)
+    
+    # Save to file
+    output_file = f"db_key_analysis_{results['schema']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    save_report_to_file(report, output_file)
+    print(f"Report has been saved to: {output_file}")
+    
+    # Also print to console if desired
+    print(report)
