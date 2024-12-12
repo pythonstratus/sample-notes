@@ -82,3 +82,38 @@ if __name__ == "__main__":
     
     # Also print to console if desired
     print(report)
+
+
+---------------------------------
+Here's a draft email explaining the index-based approach to identifying potential keys:
+
+Subject: Database Key Analysis Report - Using Indexes to Identify Potential PK/FK Relationships
+
+Hi Team,
+
+I wanted to share our approach to identifying potential primary and foreign key candidates in our database using index analysis. We've developed a report that analyzes existing indexes to suggest possible key relationships.
+
+Why Focus on Indexes:
+- Indexes often indicate important columns that are frequently queried or joined
+- Unique indexes are natural candidates for primary keys
+- Indexed columns that share names and data types across tables often suggest potential foreign key relationships
+- Existing indexes provide performance benefits if converted to PK/FK constraints
+
+The generated report provides:
+1. A list of potential primary key candidates with confidence scores based on:
+   - Index uniqueness
+   - NULL constraints
+   - Data type suitability
+   - Actual data distribution
+
+2. Potential foreign key relationships based on:
+   - Matching column names
+   - Compatible data types
+   - Existing index patterns
+
+Each suggestion includes specific recommendations for implementing the constraints and any necessary data cleanup steps.
+
+Would you like me to schedule a brief review of the findings?
+
+Best regards,
+[Your name]
