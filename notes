@@ -1,69 +1,229 @@
-def generate_report(analysis_results: Dict, include_score_explanation: bool = True) -> str:
+def analyze_tables_and_indexes(
+    host: str,
+    database: str,
+    user: str,
+    password: str,
+    port: int = 5432,
+    schema: str = 'public'
+) -> Dict:
     """
-    Generates a detailed markdown report from the analysis results.
+    Analyzes both indexed and non-indexed tables for potential keys.
+    """
+    conn = psycopg2.connect(
+        host=host,
+        database=database,
+        user=user,
+        password=password,
+        port=port
+    )
+    
+    # Query to get all tables and their columns in the schema
+    tables_query = """
+    SELECT 
+        t.relname AS table_name,
+        a.attname AS column_name,
+        format_type(a.atttypid, a.atttypmod) AS data_type,
+        a.attnotnull AS not_null,
+        col.character_maximum_length,
+        col.numeric_precision,
+        col.numeric_scale,
+        col.is_updatable,
+        col.column_default,
+        (SELECT count(*) FROM pg_constraint WHERE conrelid = t.oid) AS constraint_count,
+        has_index.has_index
+    FROM 
+        pg_class t
+        JOIN pg_attribute a ON a.attrelid = t.oid
+        JOIN pg_namespace n ON t.relnamespace = n.oid
+        JOIN information_schema.columns col ON 
+            col.table_schema = n.nspname AND 
+            col.table_name = t.relname AND 
+            col.column_name = a.attname
+        LEFT JOIN (
+            SELECT 
+                tablename, 
+                columnname,
+                TRUE as has_index 
+            FROM 
+                pg_indexes i
+            WHERE 
+                i.schemaname = %s
+        ) has_index ON 
+            has_index.tablename = t.relname AND 
+            has_index.columnname = a.attname
+    WHERE 
+        n.nspname = %s
+        AND t.relkind = 'r'
+        AND a.attnum > 0
+        AND NOT a.attisdropped
+    ORDER BY 
+        t.relname, a.attnum;
+    """
+    
+    try:
+        # Get all tables and columns
+        df_tables = pd.read_sql_query(tables_query, conn, params=[schema, schema])
+        
+        # Get tables without any indexes
+        tables_without_indexes = df_tables[
+            df_tables.groupby('table_name')['has_index'].transform('sum').isna()
+        ]['table_name'].unique()
+        
+        # Analyze non-indexed tables
+        non_indexed_recommendations = []
+        for table in tables_without_indexes:
+            table_cols = df_tables[df_tables['table_name'] == table]
+            
+            # Suggest potential primary key columns
+            pk_candidates = []
+            for _, col in table_cols.iterrows():
+                pk_score = calculate_non_indexed_pk_score(col)
+                if pk_score > 0.5:  # Lower threshold for non-indexed suggestions
+                    pk_candidates.append({
+                        'column_name': col['column_name'],
+                        'data_type': col['data_type'],
+                        'score': pk_score,
+                        'reasoning': get_pk_reasoning(col)
+                    })
+            
+            # Suggest potential foreign key columns
+            fk_candidates = []
+            for _, col in table_cols.iterrows():
+                matching_cols = df_tables[
+                    (df_tables['column_name'] == col['column_name']) &
+                    (df_tables['data_type'] == col['data_type']) &
+                    (df_tables['table_name'] != table)
+                ]
+                
+                if not matching_cols.empty:
+                    fk_candidates.append({
+                        'column_name': col['column_name'],
+                        'data_type': col['data_type'],
+                        'potential_references': matching_cols['table_name'].unique().tolist()
+                    })
+            
+            non_indexed_recommendations.append({
+                'table_name': table,
+                'pk_candidates': pk_candidates,
+                'fk_candidates': fk_candidates,
+                'recommendations': generate_table_recommendations(table_cols)
+            })
+        
+        return {
+            'non_indexed_tables': pd.DataFrame(non_indexed_recommendations),
+            'tables_with_indexes': analyze_indexes(conn, schema)  # Original index analysis
+        }
+        
+    finally:
+        conn.close()
+
+def calculate_non_indexed_pk_score(column: pd.Series) -> float:
+    """
+    Calculate potential PK score for non-indexed columns.
+    """
+    score = 0.0
+    
+    # Data type suitability
+    if column['data_type'].lower() in ('integer', 'bigint', 'uuid'):
+        score += 0.3
+    elif column['data_type'].lower() in ('character varying', 'text'):
+        score += 0.1
+    
+    # NOT NULL constraint
+    if column['not_null']:
+        score += 0.3
+    
+    # Has default value (potential sequence/identity)
+    if column['column_default'] is not None:
+        score += 0.2
+    
+    # Column name suggests ID
+    if 'id' in column['column_name'].lower():
+        score += 0.1
+    
+    return score
+
+def get_pk_reasoning(column: pd.Series) -> List[str]:
+    """
+    Generate explanation for PK suggestion.
+    """
+    reasons = []
+    
+    if column['not_null']:
+        reasons.append("Column is NOT NULL")
+    
+    if column['data_type'].lower() in ('integer', 'bigint', 'uuid'):
+        reasons.append("Suitable data type for PK")
+    
+    if column['column_default'] is not None:
+        reasons.append("Has default value/sequence")
+    
+    if 'id' in column['column_name'].lower():
+        reasons.append("Column name suggests identifier")
+    
+    return reasons
+
+def generate_table_recommendations(table_cols: pd.DataFrame) -> List[str]:
+    """
+    Generate general recommendations for table without indexes.
+    """
+    recs = [
+        "Consider adding indexes for frequently queried columns",
+        "Review table usage patterns to identify optimal index candidates"
+    ]
+    
+    # Check for timestamp/audit columns
+    if not any('created' in col.lower() or 'updated' in col.lower() 
+               for col in table_cols['column_name']):
+        recs.append("Consider adding audit columns (created_at, updated_at)")
+    
+    return recs
+
+def generate_enhanced_report(analysis_results: Dict) -> str:
+    """
+    Generate comprehensive report including non-indexed tables.
     """
     report = []
-    
-    # Add report header
     report.append("# Database Key Analysis Report\n")
     
-    # Add scoring explanation if requested
-    if include_score_explanation:
-        report.append("## Confidence Score Explanation")
-        report.append("The confidence score (0-100%) is calculated based on the following criteria:")
-        report.append("1. Uniqueness (40%): Column has unique constraint")
-        report.append("2. NOT NULL constraint (20%): Column doesn't allow nulls")
-        report.append("3. Data Type (10%): Column is INTEGER, BIGINT, or UUID")
-        report.append("4. Null Fraction (10%): No null values in actual data")
-        report.append("5. Distinct Values (10%): >99% values are unique")
-        report.append("6. Existing Constraints (10%): Column has other constraints\n")
-        report.append("Scores above 70% indicate good candidates for primary keys.\n")
+    # Report on tables without indexes
+    report.append("## Tables Without Indexes")
+    for _, table in analysis_results['non_indexed_tables'].iterrows():
+        report.append(f"\n### Table: {table['table_name']}")
+        
+        # PK candidates
+        if table['pk_candidates']:
+            report.append("\nPotential Primary Key Candidates:")
+            for pk in table['pk_candidates']:
+                report.append(f"- Column: {pk['column_name']}")
+                report.append(f"  * Data Type: {pk['data_type']}")
+                report.append(f"  * Confidence Score: {pk['score']:.2%}")
+                report.append("  * Reasoning:")
+                for reason in pk['reasoning']:
+                    report.append(f"    - {reason}")
+        
+        # FK candidates
+        if table['fk_candidates']:
+            report.append("\nPotential Foreign Key Candidates:")
+            for fk in table['fk_candidates']:
+                report.append(f"- Column: {fk['column_name']}")
+                report.append(f"  * Data Type: {fk['data_type']}")
+                report.append(f"  * Could Reference: {', '.join(fk['potential_references'])}")
+        
+        # Recommendations
+        if table['recommendations']:
+            report.append("\nRecommendations:")
+            for rec in table['recommendations']:
+                report.append(f"- {rec}")
     
-    # Potential Primary Keys
-    report.append("## Potential Primary Keys")
-    
-    if not analysis_results['potential_pks'].empty:
-        for _, row in analysis_results['potential_pks'].iterrows():
-            report.append(f"\n### Table: {row['table_name']}")
-            report.append(f"- Column: {row['column_name']}")
-            report.append(f"- Confidence Score: {row['pk_score']:.2%}")
-            report.append(f"- Data Type: {row['data_type']}")
-            report.append(f"- Current Index: {row['index_name']}")
-            if row['recommendations']:
-                report.append("- Recommendations:")
-                for rec in row['recommendations']:
-                    report.append(f"  * {rec}")
-    else:
-        report.append("\nNo potential primary keys identified.")
-    
-    # Potential Foreign Keys
-    report.append("\n## Potential Foreign Keys")
-    
-    if not analysis_results['potential_fks'].empty:
-        for _, row in analysis_results['potential_fks'].iterrows():
-            report.append(f"\n### {row['source_table']}.{row['source_column']}")
-            report.append(f"- Confidence Score: {row['fk_score']:.2%}")
-            report.append(f"- Data Type: {row['data_type']}")
-            report.append(f"- Could reference: {', '.join(row['potential_referenced_tables'])}")
-            if row['recommendations']:
-                report.append("- Recommendations:")
-                for rec in row['recommendations']:
-                    report.append(f"  * {rec}")
-    else:
-        report.append("\nNo potential foreign keys identified.")
+    # Add original indexed tables analysis
+    report.append("\n" + generate_report(analysis_results['tables_with_indexes']))
     
     return "\n".join(report)
 
-def save_report_to_file(report: str, filename: str) -> None:
-    """
-    Saves the report to a text file.
-    """
-    with open(filename, 'w', encoding='utf-8') as f:
-        f.write(report)
-
 # Usage example
 if __name__ == "__main__":
-    results = analyze_indexes(
+    results = analyze_tables_and_indexes(
         host="localhost",
         database="your_database",
         user="your_user",
@@ -72,48 +232,11 @@ if __name__ == "__main__":
         schema="your_schema"
     )
     
-    # Generate report with score explanation
-    report = generate_report(results, include_score_explanation=True)
+    report = generate_enhanced_report(results)
     
-    # Save to file
-    output_file = f"db_key_analysis_{results['schema']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-    save_report_to_file(report, output_file)
+    # Save to file with timestamp
+    output_file = f"db_key_analysis_{schema}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write(report)
+    
     print(f"Report has been saved to: {output_file}")
-    
-    # Also print to console if desired
-    print(report)
-
-
----------------------------------
-Here's a draft email explaining the index-based approach to identifying potential keys:
-
-Subject: Database Key Analysis Report - Using Indexes to Identify Potential PK/FK Relationships
-
-Hi Team,
-
-I wanted to share our approach to identifying potential primary and foreign key candidates in our database using index analysis. We've developed a report that analyzes existing indexes to suggest possible key relationships.
-
-Why Focus on Indexes:
-- Indexes often indicate important columns that are frequently queried or joined
-- Unique indexes are natural candidates for primary keys
-- Indexed columns that share names and data types across tables often suggest potential foreign key relationships
-- Existing indexes provide performance benefits if converted to PK/FK constraints
-
-The generated report provides:
-1. A list of potential primary key candidates with confidence scores based on:
-   - Index uniqueness
-   - NULL constraints
-   - Data type suitability
-   - Actual data distribution
-
-2. Potential foreign key relationships based on:
-   - Matching column names
-   - Compatible data types
-   - Existing index patterns
-
-Each suggestion includes specific recommendations for implementing the constraints and any necessary data cleanup steps.
-
-Would you like me to schedule a brief review of the findings?
-
-Best regards,
-[Your name]
