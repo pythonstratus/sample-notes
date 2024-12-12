@@ -1,223 +1,317 @@
-# Databricks notebook source
-from pyspark.sql.functions import *
-from pyspark.sql.types import *
+import psycopg2
+from typing import List, Dict, Tuple
 import pandas as pd
-from datetime import datetime
 
-# COMMAND ----------
-# Get all the data first
-def collect_audit_data():
-    schemas_df = spark.sql("SHOW DATABASES")
+def analyze_indexes(
+    host: str,
+    database: str,
+    user: str,
+    password: str,
+    port: int = 5432,
+    schema: str = 'public'
+) -> Dict:
+    """
+    Analyzes PostgreSQL indexes and column properties to identify potential primary and foreign keys.
+    """
+    conn = psycopg2.connect(
+        host=host,
+        database=database,
+        user=user,
+        password=password,
+        port=port
+    )
     
-    all_tables = []
-    all_privileges = []
-    
-    for schema in schemas_df.select("databaseName").collect():
-        schema_name = schema.databaseName
-        # Get tables
-        try:
-            tables_df = spark.sql(f"SHOW TABLES IN {schema_name}")
-            all_tables.append({"schema": schema_name, "tables": tables_df})
-        except Exception as e:
-            print(f"Error getting tables for {schema_name}: {str(e)}")
-            
-        # Get privileges
-        try:
-            privileges_df = spark.sql(f"SHOW GRANT ON SCHEMA {schema_name}")
-            all_privileges.append({"schema": schema_name, "privileges": privileges_df})
-        except Exception as e:
-            print(f"Error getting privileges for {schema_name}: {str(e)}")
-            
-    return schemas_df, all_tables, all_privileges
-
-# COMMAND ----------
-schemas_df, all_tables, all_privileges = collect_audit_data()
-
-# COMMAND ----------
-# Generate HTML report
-def generate_html_report(schemas_df, all_tables, all_privileges):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
-    html = f"""
-    <html>
-    <head>
-        <style>
-            .report-container {{
-                font-family: 'Helvetica Neue', Arial, sans-serif;
-                max-width: 1200px;
-                margin: 20px auto;
-                padding: 20px;
-            }}
-            .header {{
-                background: #1976D2;
-                color: white;
-                padding: 20px;
-                border-radius: 8px;
-                margin-bottom: 20px;
-            }}
-            .section {{
-                background: white;
-                padding: 20px;
-                margin-bottom: 20px;
-                border-radius: 8px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }}
-            .schema-card {{
-                border: 1px solid #ddd;
-                margin: 10px 0;
-                padding: 15px;
-                border-radius: 4px;
-            }}
-            table {{
-                width: 100%;
-                border-collapse: collapse;
-                margin: 10px 0;
-            }}
-            th, td {{
-                padding: 12px;
-                text-align: left;
-                border-bottom: 1px solid #ddd;
-            }}
-            th {{
-                background-color: #f5f5f5;
-            }}
-            .metric {{
-                display: inline-block;
-                padding: 15px;
-                background: #f8f9fa;
-                border-radius: 4px;
-                margin: 5px;
-                min-width: 200px;
-            }}
-            .toggle-btn {{
-                background: #2196F3;
-                color: white;
-                border: none;
-                padding: 8px 15px;
-                border-radius: 4px;
-                cursor: pointer;
-                margin: 5px;
-            }}
-            .toggle-btn:hover {{
-                background: #1976D2;
-            }}
-            .hidden {{
-                display: none;
-            }}
-        </style>
-        <script>
-            function toggleSection(elementId) {{
-                var element = document.getElementById(elementId);
-                if (element.classList.contains('hidden')) {{
-                    element.classList.remove('hidden');
-                }} else {{
-                    element.classList.add('hidden');
-                }}
-            }}
-        </script>
-    </head>
-    <body>
-        <div class="report-container">
-            <div class="header">
-                <h1>Databricks Schema Audit Report</h1>
-                <p>Generated on: {timestamp}</p>
-            </div>
-            
-            <div class="section">
-                <h2>Summary Metrics</h2>
-                <div class="metric">
-                    <strong>Total Schemas:</strong> {schemas_df.count()}
-                </div>
-                <div class="metric">
-                    <strong>Total Tables:</strong> {sum([tables["tables"].count() for tables in all_tables])}
-                </div>
-            </div>
+    # Enhanced query to get indexes and additional column information
+    index_query = """
+    SELECT 
+        t.relname AS table_name,
+        i.relname AS index_name,
+        a.attname AS column_name,
+        ix.indisunique AS is_unique,
+        ix.indisprimary AS is_primary,
+        ix.indisvalid AS is_valid,
+        pg_get_indexdef(ix.indexrelid) AS index_definition,
+        format_type(a.atttypid, a.atttypmod) AS data_type,
+        a.attnotnull AS not_null,
+        col.is_updatable,
+        (SELECT count(*) FROM pg_depend d 
+         WHERE d.objid = a.attnum 
+         AND d.classid = t.oid 
+         AND d.refclassid = 'pg_constraint'::regclass) AS constraint_count
+    FROM 
+        pg_class t
+        JOIN pg_index ix ON t.oid = ix.indrelid
+        JOIN pg_class i ON i.oid = ix.indexrelid
+        JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
+        JOIN pg_namespace n ON t.relnamespace = n.oid
+        JOIN information_schema.columns col ON 
+            col.table_schema = n.nspname AND 
+            col.table_name = t.relname AND 
+            col.column_name = a.attname
+    WHERE 
+        n.nspname = %s
+        AND t.relkind = 'r'
+    ORDER BY 
+        t.relname, i.relname;
     """
     
-    # Add Schemas Section
-    html += """
-            <div class="section">
-                <h2>Schema Details</h2>
+    # Query to get column statistics and null ratios
+    stats_query = """
+    SELECT 
+        schemaname,
+        tablename,
+        attname AS column_name,
+        null_frac,
+        n_distinct,
+        correlation,
+        most_common_vals,
+        most_common_freqs
+    FROM 
+        pg_stats
+    WHERE 
+        schemaname = %s;
     """
     
-    for schema in schemas_df.collect():
-        schema_name = schema.databaseName
-        
-        # Find tables for this schema
-        schema_tables = next((t["tables"] for t in all_tables if t["schema"] == schema_name), None)
-        table_count = schema_tables.count() if schema_tables is not None else 0
-        
-        # Find privileges for this schema
-        schema_privileges = next((p["privileges"] for p in all_privileges if p["schema"] == schema_name), None)
-        
-        html += f"""
-            <div class="schema-card">
-                <h3>{schema_name}</h3>
-                <button class="toggle-btn" onclick="toggleSection('{schema_name}-tables')">
-                    Toggle Tables ({table_count})
-                </button>
-                <button class="toggle-btn" onclick="toggleSection('{schema_name}-privileges')">
-                    Toggle Privileges
-                </button>
-                
-                <div id="{schema_name}-tables" class="hidden">
-                    <h4>Tables:</h4>
-                    <table>
-                        <tr>
-                            <th>Table Name</th>
-                            <th>Type</th>
-                        </tr>
-        """
-        
-        if schema_tables is not None:
-            for table in schema_tables.collect():
-                html += f"""
-                    <tr>
-                        <td>{table.tableName}</td>
-                        <td>{table.tableType}</td>
-                    </tr>
-                """
-                
-        html += """
-                    </table>
-                </div>
-        """
-        
-        html += f"""
-                <div id="{schema_name}-privileges" class="hidden">
-                    <h4>Privileges:</h4>
-                    <table>
-                        <tr>
-                            <th>Principal</th>
-                            <th>Action</th>
-                        </tr>
-        """
-        
-        if schema_privileges is not None:
-            for priv in schema_privileges.collect():
-                html += f"""
-                    <tr>
-                        <td>{priv.principal}</td>
-                        <td>{priv.actionType}</td>
-                    </tr>
-                """
-                
-        html += """
-                    </table>
-                </div>
-            </div>
-        """
-    
-    html += """
-            </div>
-        </div>
-    </body>
-    </html>
+    # Query to get row counts for tables
+    count_query = """
+    SELECT 
+        relname AS table_name,
+        n_live_tup AS row_count
+    FROM 
+        pg_stat_user_tables
+    WHERE 
+        schemaname = %s;
     """
     
-    return html
+    try:
+        df_indexes = pd.read_sql_query(index_query, conn, params=[schema])
+        df_stats = pd.read_sql_query(stats_query, conn, params=[schema])
+        df_counts = pd.read_sql_query(count_query, conn, params=[schema])
+        
+        # Analyze potential primary keys with enhanced criteria
+        potential_pks = []
+        for _, idx_row in df_indexes.iterrows():
+            if not idx_row['is_primary']:
+                # Get statistics for this column
+                stats = df_stats[
+                    (df_stats['tablename'] == idx_row['table_name']) &
+                    (df_stats['column_name'] == idx_row['column_name'])
+                ].iloc[0] if not df_stats.empty else None
+                
+                # Get row count for the table
+                row_count = df_counts[
+                    df_counts['table_name'] == idx_row['table_name']
+                ]['row_count'].iloc[0]
+                
+                pk_score = calculate_pk_score(
+                    is_unique=idx_row['is_unique'],
+                    not_null=idx_row['not_null'],
+                    data_type=idx_row['data_type'],
+                    null_frac=stats['null_frac'] if stats is not None else None,
+                    n_distinct=stats['n_distinct'] if stats is not None else None,
+                    row_count=row_count,
+                    constraint_count=idx_row['constraint_count']
+                )
+                
+                if pk_score > 0.7:  # Threshold for considering as PK
+                    potential_pks.append({
+                        'table_name': idx_row['table_name'],
+                        'column_name': idx_row['column_name'],
+                        'index_name': idx_row['index_name'],
+                        'data_type': idx_row['data_type'],
+                        'pk_score': pk_score,
+                        'index_definition': idx_row['index_definition'],
+                        'recommendations': generate_pk_recommendations(idx_row, stats)
+                    })
+        
+        # Analyze potential foreign keys with enhanced validation
+        potential_fks = []
+        for _, idx_row in df_indexes.iterrows():
+            if not idx_row['is_primary']:
+                matching_indexes = df_indexes[
+                    (df_indexes['column_name'] == idx_row['column_name']) &
+                    (df_indexes['table_name'] != idx_row['table_name']) &
+                    (df_indexes['data_type'] == idx_row['data_type'])  # Match data types
+                ]
+                
+                if not matching_indexes.empty:
+                    fk_score = calculate_fk_score(idx_row, matching_indexes, df_stats)
+                    if fk_score > 0.6:  # Threshold for considering as FK
+                        potential_fks.append({
+                            'source_table': idx_row['table_name'],
+                            'source_column': idx_row['column_name'],
+                            'potential_referenced_tables': matching_indexes['table_name'].tolist(),
+                            'index_name': idx_row['index_name'],
+                            'data_type': idx_row['data_type'],
+                            'fk_score': fk_score,
+                            'recommendations': generate_fk_recommendations(idx_row, matching_indexes)
+                        })
+        
+        return {
+            'potential_pks': pd.DataFrame(potential_pks),
+            'potential_fks': pd.DataFrame(potential_fks),
+            'column_stats': df_stats
+        }
+        
+    finally:
+        conn.close()
 
-# COMMAND ----------
-# Display the report
-html_report = generate_html_report(schemas_df, all_tables, all_privileges)
-displayHTML(html_report)
+def calculate_pk_score(
+    is_unique: bool,
+    not_null: bool,
+    data_type: str,
+    null_frac: float,
+    n_distinct: float,
+    row_count: int,
+    constraint_count: int
+) -> float:
+    """
+    Calculate a score indicating how suitable a column is as a primary key.
+    Returns a score between 0 and 1.
+    """
+    score = 0.0
+    
+    # Unique constraint is crucial for PK
+    if is_unique:
+        score += 0.4
+    
+    # Not null constraint is important
+    if not_null:
+        score += 0.2
+    
+    # Preferred data types for PKs
+    if data_type.lower() in ('integer', 'bigint', 'uuid'):
+        score += 0.1
+    
+    # Check null fraction if available
+    if null_frac is not None and null_frac == 0:
+        score += 0.1
+    
+    # Check distinct values ratio if available
+    if n_distinct is not None and row_count > 0:
+        distinct_ratio = abs(n_distinct) / row_count if isinstance(n_distinct, (int, float)) else 1.0
+        if distinct_ratio > 0.99:  # Allow for some statistical variance
+            score += 0.1
+    
+    # Existing constraints might indicate importance
+    if constraint_count > 0:
+        score += 0.1
+    
+    return min(1.0, score)
+
+def calculate_fk_score(
+    source_col: pd.Series,
+    target_cols: pd.DataFrame,
+    stats_df: pd.DataFrame
+) -> float:
+    """
+    Calculate a score indicating how suitable a column is as a foreign key.
+    Returns a score between 0 and 1.
+    """
+    score = 0.0
+    
+    # Having an index is good for FK performance
+    score += 0.3
+    
+    # Matching data types is crucial
+    if not target_cols.empty:
+        score += 0.3
+        
+        # Check if any target is a PK or unique
+        if target_cols['is_primary'].any() or target_cols['is_unique'].any():
+            score += 0.2
+    
+    # Not being nullable is good for referential integrity
+    if source_col['not_null']:
+        score += 0.2
+    
+    return score
+
+def generate_pk_recommendations(row: pd.Series, stats: pd.Series) -> List[str]:
+    """Generate specific recommendations for implementing a primary key."""
+    recommendations = []
+    
+    if not row['is_unique']:
+        recommendations.append("Add UNIQUE constraint")
+    
+    if not row['not_null']:
+        recommendations.append("Add NOT NULL constraint")
+    
+    if stats is not None and stats['null_frac'] > 0:
+        recommendations.append("Clean up NULL values before converting to PK")
+    
+    if row['data_type'].lower() not in ('integer', 'bigint', 'uuid'):
+        recommendations.append("Consider using INTEGER, BIGINT, or UUID for optimal performance")
+    
+    return recommendations
+
+def generate_fk_recommendations(source: pd.Series, targets: pd.DataFrame) -> List[str]:
+    """Generate specific recommendations for implementing a foreign key."""
+    recommendations = []
+    
+    if not source['not_null']:
+        recommendations.append("Consider adding NOT NULL constraint for referential integrity")
+    
+    if not source['is_unique']:
+        recommendations.append("Create an index on this column for better query performance")
+    
+    if len(targets) > 1:
+        recommendations.append(f"Multiple potential parent tables found. Verify the correct reference table among: {', '.join(targets['table_name'].unique())}")
+    
+    return recommendations
+
+def generate_report(analysis_results: Dict) -> str:
+    """
+    Generates a detailed markdown report from the analysis results.
+    """
+    report = []
+    
+    # Potential Primary Keys
+    report.append("# Database Key Analysis Report\n")
+    report.append("## Potential Primary Keys")
+    
+    if not analysis_results['potential_pks'].empty:
+        for _, row in analysis_results['potential_pks'].iterrows():
+            report.append(f"\n### Table: {row['table_name']}")
+            report.append(f"- Column: {row['column_name']}")
+            report.append(f"- Confidence Score: {row['pk_score']:.2f}")
+            report.append(f"- Data Type: {row['data_type']}")
+            report.append(f"- Current Index: {row['index_name']}")
+            if row['recommendations']:
+                report.append("- Recommendations:")
+                for rec in row['recommendations']:
+                    report.append(f"  * {rec}")
+    else:
+        report.append("\nNo potential primary keys identified.")
+    
+    # Potential Foreign Keys
+    report.append("\n## Potential Foreign Keys")
+    
+    if not analysis_results['potential_fks'].empty:
+        for _, row in analysis_results['potential_fks'].iterrows():
+            report.append(f"\n### {row['source_table']}.{row['source_column']}")
+            report.append(f"- Confidence Score: {row['fk_score']:.2f}")
+            report.append(f"- Data Type: {row['data_type']}")
+            report.append(f"- Could reference: {', '.join(row['potential_referenced_tables'])}")
+            if row['recommendations']:
+                report.append("- Recommendations:")
+                for rec in row['recommendations']:
+                    report.append(f"  * {rec}")
+    else:
+        report.append("\nNo potential foreign keys identified.")
+    
+    return "\n".join(report)
+
+# Usage example
+if __name__ == "__main__":
+    results = analyze_indexes(
+        host="localhost",
+        database="your_database",
+        user="your_user",
+        password="your_password",
+        port=5432,
+        schema="your_schema"
+    )
+    
+    report = generate_report(results)
+    print(report)
