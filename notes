@@ -1,4 +1,15 @@
-import psycopg2.extensions
+def analyze_indexes(
+    host: str,
+    database: str,
+    user: str,
+    password: str,
+    port: int = 5432,
+    schema: str = 'public'
+) -> Dict:
+    """
+    Analyzes PostgreSQL indexes and column properties to identify potential primary and foreign keys.
+    """
+    import psycopg2.extensions
     psycopg2.extensions.register_type(psycopg2.extensions.UNICODE)
     psycopg2.extensions.register_type(psycopg2.extensions.UNICODEARRAY)
     
@@ -10,5 +21,56 @@ import psycopg2.extensions
         port=port
     )
     
-    # Set the connection's encoding to UTF8
     conn.set_client_encoding('UTF8')
+    
+    try:
+        df_indexes = pd.read_sql_query(index_query, conn, params=[schema])
+        df_stats = pd.read_sql_query(stats_query, conn, params=[schema])
+        df_counts = pd.read_sql_query(count_query, conn, params=[schema])
+        
+        # Analyze potential primary keys with enhanced criteria
+        potential_pks = []
+        for _, idx_row in df_indexes.iterrows():
+            if not idx_row['is_primary']:
+                # Get statistics for this column - safely handle empty results
+                stats_mask = (
+                    (df_stats['tablename'] == idx_row['table_name']) &
+                    (df_stats['column_name'] == idx_row['column_name'])
+                )
+                stats = df_stats[stats_mask].iloc[0] if not df_stats[stats_mask].empty else None
+                
+                # Get row count for the table - safely handle empty results
+                count_mask = df_counts['table_name'] == idx_row['table_name']
+                row_count = df_counts[count_mask]['row_count'].iloc[0] if not df_counts[count_mask].empty else 0
+                
+                pk_score = calculate_pk_score(
+                    is_unique=idx_row['is_unique'],
+                    not_null=idx_row['not_null'],
+                    data_type=idx_row['data_type'],
+                    null_frac=stats['null_frac'] if stats is not None else None,
+                    n_distinct=stats['n_distinct'] if stats is not None else None,
+                    row_count=row_count,
+                    constraint_count=idx_row['constraint_count']
+                )
+                
+                if pk_score > 0.7:  # Threshold for considering as PK
+                    potential_pks.append({
+                        'table_name': idx_row['table_name'],
+                        'column_name': idx_row['column_name'],
+                        'index_name': idx_row['index_name'],
+                        'data_type': idx_row['data_type'],
+                        'pk_score': pk_score,
+                        'index_definition': idx_row['index_definition'],
+                        'recommendations': generate_pk_recommendations(idx_row, stats)
+                    })
+        
+        # Rest of your code remains the same...
+        
+        return {
+            'potential_pks': pd.DataFrame(potential_pks) if potential_pks else pd.DataFrame(),
+            'potential_fks': pd.DataFrame(potential_fks) if 'potential_fks' in locals() else pd.DataFrame(),
+            'column_stats': df_stats
+        }
+        
+    finally:
+        conn.close()
