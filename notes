@@ -1,12 +1,14 @@
+-- Check if the foreign server exists and its configuration
 SELECT 
     srvname,
     srvoptions,
-    case when active_connections > 0 then 'Active' else 'Inactive' end as status,
-    active_connections
+    srvowner::regrole as owner,
+    fdwname as wrapper_name
 FROM pg_foreign_server fs
-LEFT JOIN (
-    SELECT foreign_server_oid, count(*) as active_connections 
-    FROM pg_foreign_server_fdw_connections 
-    GROUP BY foreign_server_oid
-) ac ON fs.oid = ac.foreign_server_oid
+JOIN pg_foreign_data_wrapper fdw ON fs.srvfdw = fdw.oid
 WHERE srvname = 'ses_ods_fs';
+
+-- To test if the connection is working, you can try:
+SELECT count(*) 
+FROM information_schema.foreign_tables 
+WHERE foreign_server_name = 'ses_ods_fs';
