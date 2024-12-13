@@ -1,7 +1,12 @@
-sv3_ses.comment (source table)
-    ↓
-tmp_event_comment (temporary staging)
-    ↓
-tmp_source (pivoted data)
-    ↓
-sv3_rpt.event_comment_pivot (destination)
+SELECT 
+    srvname,
+    srvoptions,
+    case when active_connections > 0 then 'Active' else 'Inactive' end as status,
+    active_connections
+FROM pg_foreign_server fs
+LEFT JOIN (
+    SELECT foreign_server_oid, count(*) as active_connections 
+    FROM pg_foreign_server_fdw_connections 
+    GROUP BY foreign_server_oid
+) ac ON fs.oid = ac.foreign_server_oid
+WHERE srvname = 'ses_ods_fs';
