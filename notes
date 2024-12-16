@@ -1,12 +1,14 @@
-{
-  "rules": [{
-    "rule-type": "selection",
-    "rule-id": "1",
-    "rule-name": "include-views",
-    "object-locator": {
-      "schema-name": "mcr",
-      "table-name": "line_item_data_view"
-    },
-    "rule-action": "include"
-  }]
-}
+-- First, verify that there are no duplicate combinations of file_id and loan_id
+SELECT file_id, loan_id, COUNT(*)
+FROM loan
+GROUP BY file_id, loan_id
+HAVING COUNT(*) > 1;
+
+-- If no duplicates exist, add the primary key constraint
+ALTER TABLE loan
+ADD CONSTRAINT pk_loan_file_loan_id 
+PRIMARY KEY (file_id, loan_id);
+
+-- Optionally, if you need to enforce uniqueness across these columns in Delta table:
+ALTER TABLE loan
+ADD CONSTRAINT unique_file_loan_id UNIQUE (file_id, loan_id);
