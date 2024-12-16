@@ -1,21 +1,21 @@
+CREATE OR REPLACE VIEW mcr.line_item_data_view AS
+SELECT 
+    -- Cast specific columns to NUMERIC(38,10)
+    CAST(prior_four_quarter_average AS NUMERIC(38,10)) as prior_four_quarter_average,
+    CAST(ratio_of_current_to_prior_4_avg AS NUMERIC(38,10)) as ratio_of_current_to_prior_4_avg,
+    -- Include all other columns from original table
+    -- assuming these are the rest of your columns, adjust as needed
+    *  EXCEPT (prior_four_quarter_average, ratio_of_current_to_prior_4_avg)
+FROM mcr.line_item_data;
 
 
-Hi Siobhan,
 
-Thank you for your insights about the file_id field. You make an excellent observation about its uniqueness! While file_id indeed uniquely identifies each row, our analysis suggests that both loan_month.file_id and heloc.file_id are being frequently used in joins and queries, making them strong primary key candidates with high confidence scores (100% and 80% respectively).
-
-The reason for our recommendation is based on several factors:
-1. These columns are already indexed and actively used in joins
-2. They maintain uniqueness constraints
-3. They have appropriate data types (integer)
-4. They're referenced by multiple tables, suggesting they're central to data relationships
-
-You're absolutely right that users typically focus on loan_id and month for joins. However, having file_id as a primary key could:
-- Improve query performance for existing joins
-- Ensure data integrity through proper constraints
-- Maintain the current joining patterns while adding database-level guarantees
-
-Would you like to discuss the implications of implementing these primary key constraints, or would you prefer to explore alternative key candidates that might better align with the typical usage patterns you've observed?
-
-Best regards,
-Santosh
+SELECT 
+    column_name, 
+    data_type,
+    numeric_precision,
+    numeric_scale
+FROM information_schema.columns 
+WHERE table_name = 'line_item_data_view'
+    AND table_schema = 'mcr'
+    AND column_name IN ('prior_four_quarter_average', 'ratio_of_current_to_prior_4_avg');
