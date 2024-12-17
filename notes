@@ -1,36 +1,20 @@
--- DMS Extract Query
 SELECT 
     "DMS Extract" as name,
-    * EXCEPT (dms_extract_time),
-    CASE 
-        WHEN prior_four_quarter_average IS NULL THEN 'NULL'
-        WHEN prior_four_quarter_average = 0 THEN 'ZERO'
-        ELSE 'OTHER'
-    END as prior_four_quarter_average_check,
-    CASE 
-        WHEN ratio_of_current_to_prior_4_avg IS NULL THEN 'NULL'
-        WHEN ratio_of_current_to_prior_4_avg = 0 THEN 'ZERO'
-        ELSE 'OTHER'
-    END as ratio_of_current_to_prior_4_avg_check
+    * EXCEPT (dms_extract_time, prior_four_quarter_average, ratio_of_current_to_prior_4_avg),
+    CAST(prior_four_quarter_average AS DECIMAL) as prior_four_quarter_average,
+    CAST(ratio_of_current_to_prior_4_avg AS DECIMAL) as ratio_of_current_to_prior_4_avg
 FROM msis_mcr_dms.line_item_data
 WHERE filing_id = 16096731
     AND dimension_column = "Origination, Warehousing, and Secondary Marketing (1-4 Unit Residential Only)"
-    AND line_item = "C340";
+    AND line_item = "C340"
 
--- Validation Query
+UNION ALL
+
 SELECT 
     "Validation" as name,
-    * EXCEPT (dms_extract_time),
-    CASE 
-        WHEN prior_four_quarter_average IS NULL THEN 'NULL'
-        WHEN prior_four_quarter_average = 0 THEN 'ZERO'
-        ELSE 'OTHER'
-    END as prior_four_quarter_average_check,
-    CASE 
-        WHEN ratio_of_current_to_prior_4_avg IS NULL THEN 'NULL'
-        WHEN ratio_of_current_to_prior_4_avg = 0 THEN 'ZERO'
-        ELSE 'OTHER'
-    END as ratio_of_current_to_prior_4_avg_check
+    * EXCEPT (dms_extract_time, prior_four_quarter_average, ratio_of_current_to_prior_4_avg),
+    CAST(prior_four_quarter_average AS DECIMAL) as prior_four_quarter_average,
+    CAST(ratio_of_current_to_prior_4_avg AS DECIMAL) as ratio_of_current_to_prior_4_avg
 FROM msis_mcr_val.line_item_data
 WHERE filing_id = 16096731
     AND dimension_column = "Origination, Warehousing, and Secondary Marketing (1-4 Unit Residential Only)"
