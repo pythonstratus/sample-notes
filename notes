@@ -1,14 +1,41 @@
--- First, verify that there are no duplicate combinations of file_id and loan_id
-SELECT file_id, loan_id, COUNT(*)
-FROM loan
-GROUP BY file_id, loan_id
-HAVING COUNT(*) > 1;
+Yes, you can create a view with a synthetic primary key using techniques like ROW_NUMBER() or generating a sequential ID. Here's how you can do it:
 
--- If no duplicates exist, add the primary key constraint
-ALTER TABLE loan
-ADD CONSTRAINT pk_loan_file_loan_id 
-PRIMARY KEY (file_id, loan_id);
+```sql
+CREATE OR REPLACE VIEW mcr.your_view_name AS
+SELECT 
+    -- Create synthetic PK using ROW_NUMBER
+    ROW_NUMBER() OVER (ORDER BY some_column) as synthetic_pk,
+    -- Rest of your columns from foreign table
+    t.*
+FROM foreign_table_name t;
+```
 
--- Optionally, if you need to enforce uniqueness across these columns in Delta table:
-ALTER TABLE loan
-ADD CONSTRAINT unique_file_loan_id UNIQUE (file_id, loan_id);
+Alternative approaches:
+
+1. Using concatenated fields:
+```sql
+CREATE OR REPLACE VIEW mcr.your_view_name AS
+SELECT 
+    -- Create synthetic PK by concatenating fields that together make a unique record
+    CONCAT(field1, '_', field2, '_', field3) as synthetic_pk,
+    t.*
+FROM foreign_table_name t;
+```
+
+2. Using MD5 hash:
+```sql
+CREATE OR REPLACE VIEW mcr.your_view_name AS
+SELECT 
+    -- Create synthetic PK using MD5 hash of multiple columns
+    MD5(CONCAT(field1::text, field2::text, field3::text)) as synthetic_pk,
+    t.*
+FROM foreign_table_name t;
+```
+
+Important considerations:
+1. Choose columns for ordering in ROW_NUMBER that will give consistent results
+2. Make sure the synthetic key will remain stable between migrations
+3. The synthetic key should be truly unique across all rows
+4. Consider the performance impact of generating these keys
+
+Would you like me to provide an example using your specific foreign table columns?
