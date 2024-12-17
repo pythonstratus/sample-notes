@@ -1,3 +1,4 @@
+df = spark.sql("""
 SELECT 
     "DMS Extract" as name,
     * EXCEPT (dms_extract_time, prior_four_quarter_average, ratio_of_current_to_prior_4_avg),
@@ -18,4 +19,8 @@ SELECT
 FROM msis_mcr_val.line_item_data
 WHERE filing_id = 16096731
     AND dimension_column = "Origination, Warehousing, and Secondary Marketing (1-4 Unit Residential Only)"
-    AND line_item = "C340";
+    AND line_item = "C340"
+""")
+
+# Display the results
+df.display()
