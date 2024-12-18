@@ -1,37 +1,10 @@
-df = spark.sql("""
-SELECT 
-    "DMS Extract" as name,
-    * EXCEPT (dms_extract_time, prior_four_quarter_average, ratio_of_current_to_prior_4_avg),
-    CASE 
-        WHEN ABS(CAST(prior_four_quarter_average AS DECIMAL)) < 1E-10 THEN NULL 
-        ELSE CAST(prior_four_quarter_average AS DECIMAL)
-    END as prior_four_quarter_average,
-    CASE 
-        WHEN ABS(CAST(ratio_of_current_to_prior_4_avg AS DECIMAL)) < 1E-10 THEN NULL 
-        ELSE CAST(ratio_of_current_to_prior_4_avg AS DECIMAL)
-    END as ratio_of_current_to_prior_4_avg
-FROM msis_mcr_dms.line_item_data
-WHERE filing_id = 16096731
-    AND dimension_column = "Origination, Warehousing, and Secondary Marketing (1-4 Unit Residential Only)"
-    AND line_item = "C340"
+-- Instead of:
+SELECT * FROM table WHERE key IN (key_list)
 
-UNION ALL
-
-SELECT 
-    "Validation" as name,
-    * EXCEPT (dms_extract_time, prior_four_quarter_average, ratio_of_current_to_prior_4_avg),
-    CASE 
-        WHEN ABS(CAST(prior_four_quarter_average AS DECIMAL)) < 1E-10 THEN NULL 
-        ELSE CAST(prior_four_quarter_average AS DECIMAL)
-    END as prior_four_quarter_average,
-    CASE 
-        WHEN ABS(CAST(ratio_of_current_to_prior_4_avg AS DECIMAL)) < 1E-10 THEN NULL 
-        ELSE CAST(ratio_of_current_to_prior_4_avg AS DECIMAL)
-    END as ratio_of_current_to_prior_4_avg
-FROM msis_mcr_val.line_item_data
-WHERE filing_id = 16096731
-    AND dimension_column = "Origination, Warehousing, and Secondary Marketing (1-4 Unit Residential Only)"
-    AND line_item = "C340"
-""")
-
-df.display()
+-- Consider:
+WITH key_subset AS (
+    SELECT UNNEST(key_list) AS key
+)
+SELECT t.* 
+FROM table t
+INNER JOIN key_subset ks ON t.key = ks.key
