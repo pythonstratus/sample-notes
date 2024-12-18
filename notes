@@ -1,10 +1,15 @@
--- Instead of:
-SELECT * FROM table WHERE key IN (key_list)
+current_keys = keys.where(col("bucket") == bucket_number)
+key_list = [row.filing_id for row in current_keys.collect()]
 
--- Consider:
-WITH key_subset AS (
-    SELECT UNNEST(key_list) AS key
-)
-SELECT t.* 
-FROM table t
-INNER JOIN key_subset ks ON t.key = ks.key
+# Instead of building an IN clause, we'll create a CTE with UNNEST
+key_expr = f"UNNEST(ARRAY{key_list})"
+query = f"""
+    WITH key_subset AS (
+        SELECT {key_expr} AS key
+    )
+    SELECT t.* 
+    FROM {table} t
+    INNER JOIN key_subset ks ON t.{key} = ks.key
+"""
+
+# The rest of your code (spark.read...) would remain the same
