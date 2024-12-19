@@ -95,7 +95,72 @@ EXCEPTION WHEN OTHERS THEN
 - Handles data synchronization while maintaining referential integrity
 - Includes built-in record counting for operation validation
 
+### 6. Delete Operations and Cleanup (Lines 183-221)
+```sql
+-- Delete records
+IF v_success <> 'N' THEN
+    BEGIN
+        DELETE FROM sv3_rpt.activity
+        WHERE activity_salesforce_id IN (SELECT activity_salesforce_id FROM to_delete);
+    EXCEPTION WHEN OTHERS THEN
+        v_success := 'N';
+        v_error_number := SQLSTATE;
+        v_error_message := SQLERRM;
+        v_sql_statement := 'Generic Insert Section';
+        RAISE NOTICE 'ERROR: %, MESSAGE: %', SQLSTATE, SQLERRM;
+        PERFORM logging.error_log_insert(...);
+    END;
+END IF;
+
+-- Cleanup and Final Status Update
+DROP TABLE IF EXISTS tmp_case_milestone, tmp_source, to_delete;
+SELECT count(*) FROM sv3_rpt.activity INTO v_curr_rec_count;
+v_end_date := CURRENT_TIMESTAMP;
+
+-- Log Final Status
+PERFORM logging.load_status_insert
+(
+    v_table_name,
+    v_program_unit,
+    v_program_unit_type_code,
+    v_file_path,
+    v_success,
+    v_start_date,
+    v_end_date,
+    v_prev_rec_count::integer,
+    v_curr_rec_count::integer,
+    v_recs_inserted,
+    v_recs_updated,
+    v_recs_deleted,
+    v_user_name,
+    v_end_date
+);
+```
+
+This final section handles:
+1. Deletion of records that are no longer needed
+   - Only executes if no previous errors occurred (v_success <> 'N')
+   - Deletes records based on the temporary to_delete table
+   - Includes error handling for the delete operation
+
+2. Cleanup Operations
+   - Drops all temporary tables used in the process (tmp_case_milestone, tmp_source, to_delete)
+   - Gets final record count from the activity table
+   - Sets the end timestamp for the operation
+
+3. Final Status Logging
+   - Calls logging.load_status_insert to record the complete operation details
+   - Logs comprehensive metrics including:
+     - Table and program information
+     - Success/failure status
+     - Start and end timestamps
+     - Record counts (previous and current)
+     - Number of records inserted, updated, and deleted
+     - User information
+     - Operation completion time
+
 ## Dependencies
 - Requires access to sv3_ses schema tables
 - Needs appropriate permissions on sv3_rpt.activity table
 - Relies on logging schema for error handling
+- Requires appropriate permissions for temporary table creation and deletion
