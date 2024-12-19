@@ -1,15 +1,59 @@
-current_keys = keys.where(col("bucket") == bucket_number)
-key_list = [row.filing_id for row in current_keys.collect()]
+# Database Primary Key Implementation
 
-# Instead of building an IN clause, we'll create a CTE with UNNEST
-key_expr = f"UNNEST(ARRAY{key_list})"
-query = f"""
-    WITH key_subset AS (
-        SELECT {key_expr} AS key
-    )
-    SELECT t.* 
-    FROM {table} t
-    INNER JOIN key_subset ks ON t.{key} = ks.key
-"""
+This document outlines the process of validating and implementing primary keys for tables migrated from PostgreSQL to Databricks.
 
-# The rest of your code (spark.read...) would remain the same
+## Table of Contents
+- [Loan Table Primary Key Implementation](#loan-table)
+- [Other Tables (TBD)](#other-tables)
+
+## Loan Table
+
+The following steps were taken to implement a composite primary key (loan_id, file_path) for the loan table:
+
+### 1. Validate Uniqueness
+First, we checked for any duplicate combinations of loan_id and file_path:
+
+```sql
+SELECT file_path, loan_id, COUNT(*)
+FROM staging.bk_mpo.loan
+GROUP BY file_path, loan_id
+HAVING COUNT(*) > 1;
+```
+
+### 2. Check for NULL Values
+We verified the presence of NULL values in the proposed primary key columns:
+
+```sql
+SELECT file_path, loan_id
+FROM staging.bk_mpo.loan
+WHERE file_path IS NULL;
+```
+
+### 3. Make Columns NOT NULL
+After confirming the data integrity, we altered the column to enforce NOT NULL constraint:
+
+```sql
+ALTER TABLE staging.bk_mpo.loan ALTER COLUMN file_path SET NOT NULL;
+```
+
+### 4. Create Primary Key Constraint
+Finally, we added the primary key constraint:
+
+```sql
+ALTER TABLE staging.bk_mpo.loan
+ADD CONSTRAINT loan_id_file_path PRIMARY KEY (loan_id, file_path);
+```
+
+### Additional Notes
+- The validation steps ensure data integrity before implementing constraints
+- This implementation uses a composite key combining loan_id and file_path
+- Databricks enforces these constraints during write operations
+
+## Other Tables
+[Additional table implementations will be documented here]
+
+---
+**Note**: When implementing primary keys in Databricks:
+- Constraints are enforced during write operations
+- Consider using OPTIMIZE with ZORDER BY on primary key columns for better performance
+- Ensure all constituent columns of the primary key are NOT NULL
