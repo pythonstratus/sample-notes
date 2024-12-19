@@ -1,59 +1,101 @@
-# Database Primary Key Implementation
+# PostgreSQL Activity Upsert Script Documentation
 
-This document outlines the process of validating and implementing primary keys for tables migrated from PostgreSQL to Databricks.
+## Overview
+This script implements an upsert (INSERT/UPDATE) operation for an activity tracking system in PostgreSQL. The script handles the synchronization of activity data between a source and target table, managing inserts, updates, and deletes while maintaining data integrity.
 
-## Table of Contents
-- [Loan Table Primary Key Implementation](#loan-table)
-- [Other Tables (TBD)](#other-tables)
+## Script Components
 
-## Loan Table
-
-The following steps were taken to implement a composite primary key (loan_id, file_path) for the loan table:
-
-### 1. Validate Uniqueness
-First, we checked for any duplicate combinations of loan_id and file_path:
-
+### 1. Variable Declarations (Lines 1-23)
 ```sql
-SELECT file_path, loan_id, COUNT(*)
-FROM staging.bk_mpo.loan
-GROUP BY file_path, loan_id
-HAVING COUNT(*) > 1;
+DO
+$BODY$
+DECLARE
+```
+- Declares variables for logging and status tracking:
+  - `v_table_name`: Target table for operations ('sv3_rpt.activity')
+  - `v_file_path`: Logging file path
+  - `v_return_status`: Integer status code
+  - `v_error_number` and `v_error_message`: Error handling variables
+  - `v_function_name`: Name of the function ('sv3_rpt.activity_upsert')
+  - Counter variables for tracking record changes:
+    - `v_prev_rec_count`: Previous record count
+    - `v_curr_rec_count`: Current record count
+    - `v_recs_inserted`: Number of insertions
+    - `v_recs_updated`: Number of updates
+    - `v_recs_deleted`: Number of deletions
+  - Timestamp variables for operation tracking
+  - Status flags and program information
+
+### 2. Temporary Table Setup (Lines 25-62)
+- Drops existing temporary tables if present
+- Creates a temporary table `tmp_source` with a complex SELECT statement
+- Joins multiple tables to gather required data:
+  - Activities (sv3_ses.activity_update)
+  - Contacts (sv3_ses.contact)
+  - Record types (sv3_ses.recordtype)
+  - Events (sv3_ses.eventx)
+  - Accounts (sv3_ses.account)
+
+### 3. Record Count Calculations (Lines 63-88)
+```sql
+-- Calculate previous count
+SELECT count(*) FROM sv3_rpt.activity INTO v_prev_rec_count;
+
+-- Calculate records to be inserted
+SELECT count(*) FROM tmp_source a
+LEFT JOIN sv3_rpt.activity b ON a.activity_salesforce_id = b.activity_salesforce_id
+WHERE b.activity_salesforce_id IS NULL
+INTO v_recs_inserted;
+
+-- Calculate records to be deleted
+CREATE TEMP TABLE to_delete AS
+SELECT a.activity_salesforce_id
+FROM sv3_rpt.activity a
+LEFT JOIN tmp_source b ON a.activity_salesforce_id = b.activity_salesforce_id
+WHERE b.activity_salesforce_id IS NULL;
+
+-- Calculate records to be updated
+SELECT count(*) FROM tmp_source a
+LEFT JOIN sv3_rpt.activity b ON a.activity_salesforce_id = b.activity_salesforce_id
+WHERE b.activity_salesforce_id IS NOT NULL
+INTO v_recs_updated;
 ```
 
-### 2. Check for NULL Values
-We verified the presence of NULL values in the proposed primary key columns:
+### 4. Insert/Update Operation (Lines 90-150)
+- Implements the main upsert logic using PostgreSQL's ON CONFLICT syntax
+- Handles both INSERT and UPDATE operations in a single statement
+- Updates all fields when a conflict occurs on the `uk_activity_id` constraint
+- Fields include:
+  - Activity details (name, code, type)
+  - Contact information
+  - Entity and supervision details
+  - Temporal information (pay period, dates)
+  - Salesforce-specific identifiers
+  - Location and department information
 
+### 5. Error Handling (Lines ~151-170)
 ```sql
-SELECT file_path, loan_id
-FROM staging.bk_mpo.loan
-WHERE file_path IS NULL;
+EXCEPTION WHEN OTHERS THEN
+    v_success := 'N';
+    v_error_number := SQLSTATE;
+    v_error_message := SQLERRM;
+    v_sql_statement := 'Generic Insert Section';
+    RAISE NOTICE 'ERROR: %, MESSAGE: %', SQLSTATE, SQLERRM;
+    PERFORM logging.error_log_insert(...);
 ```
+- Implements comprehensive error handling
+- Sets failure flags and captures error details
+- Logs errors with detailed context
+- Includes error number, message, and SQL state information
 
-### 3. Make Columns NOT NULL
-After confirming the data integrity, we altered the column to enforce NOT NULL constraint:
+## Usage Notes
+- The script is designed for atomic operations - all changes succeed or fail together
+- Implements logging for audit and troubleshooting purposes
+- Uses temporary tables to stage data before final commit
+- Handles data synchronization while maintaining referential integrity
+- Includes built-in record counting for operation validation
 
-```sql
-ALTER TABLE staging.bk_mpo.loan ALTER COLUMN file_path SET NOT NULL;
-```
-
-### 4. Create Primary Key Constraint
-Finally, we added the primary key constraint:
-
-```sql
-ALTER TABLE staging.bk_mpo.loan
-ADD CONSTRAINT loan_id_file_path PRIMARY KEY (loan_id, file_path);
-```
-
-### Additional Notes
-- The validation steps ensure data integrity before implementing constraints
-- This implementation uses a composite key combining loan_id and file_path
-- Databricks enforces these constraints during write operations
-
-## Other Tables
-[Additional table implementations will be documented here]
-
----
-**Note**: When implementing primary keys in Databricks:
-- Constraints are enforced during write operations
-- Consider using OPTIMIZE with ZORDER BY on primary key columns for better performance
-- Ensure all constituent columns of the primary key are NOT NULL
+## Dependencies
+- Requires access to sv3_ses schema tables
+- Needs appropriate permissions on sv3_rpt.activity table
+- Relies on logging schema for error handling
