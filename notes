@@ -282,3 +282,46 @@ SELECT
 FROM status_summary
 GROUP BY file_process_state
 ORDER BY count DESC;
+
+
+### Option 1:
+SELECT 
+    r.as_of_month,
+    COUNT(*) as raw_count,
+    (SELECT COUNT(*) 
+     FROM bk_mpo.heloc s
+     WHERE s.as_of_month = r.as_of_month
+    ) as silver_count
+FROM bk_mpo_raw.heloc r
+GROUP BY r.as_of_month
+ORDER BY r.as_of_month;
+
+## Option 2: you could use a LEFT JOIN approach which might be clearer
+SELECT 
+    r.as_of_month,
+    COUNT(r.*) as raw_count,
+    COUNT(s.*) as silver_count
+FROM bk_mpo_raw.heloc r
+LEFT JOIN bk_mpo.heloc s
+    ON r.as_of_month = s.as_of_month
+GROUP BY r.as_of_month
+ORDER BY r.as_of_month;
+
+## Option 3: if you want to see counts from both tables even if one is missing records for an as_of_month:
+WITH raw_counts AS (
+    SELECT as_of_month, COUNT(*) as raw_count
+    FROM bk_mpo_raw.heloc
+    GROUP BY as_of_month
+),
+silver_counts AS (
+    SELECT as_of_month, COUNT(*) as silver_count
+    FROM bk_mpo.heloc
+    GROUP BY as_of_month
+)
+SELECT 
+    COALESCE(r.as_of_month, s.as_of_month) as as_of_month,
+    COALESCE(r.raw_count, 0) as raw_count,
+    COALESCE(s.silver_count, 0) as silver_count
+FROM raw_counts r
+FULL OUTER JOIN silver_counts s ON r.as_of_month = s.as_of_month
+ORDER BY as_of_month;
