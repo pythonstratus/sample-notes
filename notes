@@ -1,166 +1,169 @@
-# PostgreSQL Activity Upsert Script Documentation
+# Database Primary Key Implementation
 
-## Overview
-This script implements an upsert (INSERT/UPDATE) operation for an activity tracking system in PostgreSQL. The script handles the synchronization of activity data between a source and target table, managing inserts, updates, and deletes while maintaining data integrity.
+This document outlines the process of validating and implementing primary keys for tables migrated from PostgreSQL to Databricks.
 
-## Script Components
+## Table of Contents
+- [Loan Table Primary Key Implementation](#loan-table)
+- [Loan Arm Table Primary Key Implementation](#loan-arm-table)
+- [Loan Current Table Primary Key Implementation](#loan-current-table)
+- [Loan Delinquency History Table Primary Key Implementation](#loan-delinquency-history-table)
+- [Loan Lookup Table Primary Key Implementation](#loan-lookup-table)
+- [MC Dash Actual Counts Table Primary Key Implementation](#mc-dash-actual-counts-table)
 
-### 1. Variable Declarations (Lines 1-23)
+## Loan Table
+
+The following steps were taken to implement a composite primary key (loan_id, file_path) for the loan table:
+
+[Previous loan table implementation remains the same]
+
+## Loan Arm Table
+
+### 1. Validate Uniqueness
 ```sql
-DO
-$BODY$
-DECLARE
-```
-- Declares variables for logging and status tracking:
-  - `v_table_name`: Target table for operations ('sv3_rpt.activity')
-  - `v_file_path`: Logging file path
-  - `v_return_status`: Integer status code
-  - `v_error_number` and `v_error_message`: Error handling variables
-  - `v_function_name`: Name of the function ('sv3_rpt.activity_upsert')
-  - Counter variables for tracking record changes:
-    - `v_prev_rec_count`: Previous record count
-    - `v_curr_rec_count`: Current record count
-    - `v_recs_inserted`: Number of insertions
-    - `v_recs_updated`: Number of updates
-    - `v_recs_deleted`: Number of deletions
-  - Timestamp variables for operation tracking
-  - Status flags and program information
-
-### 2. Temporary Table Setup (Lines 25-62)
-- Drops existing temporary tables if present
-- Creates a temporary table `tmp_source` with a complex SELECT statement
-- Joins multiple tables to gather required data:
-  - Activities (sv3_ses.activity_update)
-  - Contacts (sv3_ses.contact)
-  - Record types (sv3_ses.recordtype)
-  - Events (sv3_ses.eventx)
-  - Accounts (sv3_ses.account)
-
-### 3. Record Count Calculations (Lines 63-88)
-```sql
--- Calculate previous count
-SELECT count(*) FROM sv3_rpt.activity INTO v_prev_rec_count;
-
--- Calculate records to be inserted
-SELECT count(*) FROM tmp_source a
-LEFT JOIN sv3_rpt.activity b ON a.activity_salesforce_id = b.activity_salesforce_id
-WHERE b.activity_salesforce_id IS NULL
-INTO v_recs_inserted;
-
--- Calculate records to be deleted
-CREATE TEMP TABLE to_delete AS
-SELECT a.activity_salesforce_id
-FROM sv3_rpt.activity a
-LEFT JOIN tmp_source b ON a.activity_salesforce_id = b.activity_salesforce_id
-WHERE b.activity_salesforce_id IS NULL;
-
--- Calculate records to be updated
-SELECT count(*) FROM tmp_source a
-LEFT JOIN sv3_rpt.activity b ON a.activity_salesforce_id = b.activity_salesforce_id
-WHERE b.activity_salesforce_id IS NOT NULL
-INTO v_recs_updated;
+SELECT file_path, loan_id, COUNT(*)
+FROM staging.bk_mpo.loan_arm
+GROUP BY file_path, loan_id
+HAVING COUNT(*) > 1;
 ```
 
-### 4. Insert/Update Operation (Lines 90-150)
-- Implements the main upsert logic using PostgreSQL's ON CONFLICT syntax
-- Handles both INSERT and UPDATE operations in a single statement
-- Updates all fields when a conflict occurs on the `uk_activity_id` constraint
-- Fields include:
-  - Activity details (name, code, type)
-  - Contact information
-  - Entity and supervision details
-  - Temporal information (pay period, dates)
-  - Salesforce-specific identifiers
-  - Location and department information
-
-### 5. Error Handling (Lines ~151-170)
+### 2. Check for NULL Values
 ```sql
-EXCEPTION WHEN OTHERS THEN
-    v_success := 'N';
-    v_error_number := SQLSTATE;
-    v_error_message := SQLERRM;
-    v_sql_statement := 'Generic Insert Section';
-    RAISE NOTICE 'ERROR: %, MESSAGE: %', SQLSTATE, SQLERRM;
-    PERFORM logging.error_log_insert(...);
-```
-- Implements comprehensive error handling
-- Sets failure flags and captures error details
-- Logs errors with detailed context
-- Includes error number, message, and SQL state information
-
-## Usage Notes
-- The script is designed for atomic operations - all changes succeed or fail together
-- Implements logging for audit and troubleshooting purposes
-- Uses temporary tables to stage data before final commit
-- Handles data synchronization while maintaining referential integrity
-- Includes built-in record counting for operation validation
-
-### 6. Delete Operations and Cleanup (Lines 183-221)
-```sql
--- Delete records
-IF v_success <> 'N' THEN
-    BEGIN
-        DELETE FROM sv3_rpt.activity
-        WHERE activity_salesforce_id IN (SELECT activity_salesforce_id FROM to_delete);
-    EXCEPTION WHEN OTHERS THEN
-        v_success := 'N';
-        v_error_number := SQLSTATE;
-        v_error_message := SQLERRM;
-        v_sql_statement := 'Generic Insert Section';
-        RAISE NOTICE 'ERROR: %, MESSAGE: %', SQLSTATE, SQLERRM;
-        PERFORM logging.error_log_insert(...);
-    END;
-END IF;
-
--- Cleanup and Final Status Update
-DROP TABLE IF EXISTS tmp_case_milestone, tmp_source, to_delete;
-SELECT count(*) FROM sv3_rpt.activity INTO v_curr_rec_count;
-v_end_date := CURRENT_TIMESTAMP;
-
--- Log Final Status
-PERFORM logging.load_status_insert
-(
-    v_table_name,
-    v_program_unit,
-    v_program_unit_type_code,
-    v_file_path,
-    v_success,
-    v_start_date,
-    v_end_date,
-    v_prev_rec_count::integer,
-    v_curr_rec_count::integer,
-    v_recs_inserted,
-    v_recs_updated,
-    v_recs_deleted,
-    v_user_name,
-    v_end_date
-);
+SELECT file_path, loan_id
+FROM staging.bk_mpo.loan_arm
+WHERE file_path IS NULL;
 ```
 
-This final section handles:
-1. Deletion of records that are no longer needed
-   - Only executes if no previous errors occurred (v_success <> 'N')
-   - Deletes records based on the temporary to_delete table
-   - Includes error handling for the delete operation
+### 3. Make Columns NOT NULL
+```sql
+ALTER TABLE staging.bk_mpo.loan_arm ALTER COLUMN file_path SET NOT NULL;
+```
 
-2. Cleanup Operations
-   - Drops all temporary tables used in the process (tmp_case_milestone, tmp_source, to_delete)
-   - Gets final record count from the activity table
-   - Sets the end timestamp for the operation
+### 4. Create Primary Key Constraint
+```sql
+ALTER TABLE staging.bk_mpo.loan_arm
+ADD CONSTRAINT loan_arm_id_file_path PRIMARY KEY (loan_id, file_path);
+```
 
-3. Final Status Logging
-   - Calls logging.load_status_insert to record the complete operation details
-   - Logs comprehensive metrics including:
-     - Table and program information
-     - Success/failure status
-     - Start and end timestamps
-     - Record counts (previous and current)
-     - Number of records inserted, updated, and deleted
-     - User information
-     - Operation completion time
+## Loan Current Table
 
-## Dependencies
-- Requires access to sv3_ses schema tables
-- Needs appropriate permissions on sv3_rpt.activity table
-- Relies on logging schema for error handling
-- Requires appropriate permissions for temporary table creation and deletion
+### 1. Validate Uniqueness
+```sql
+SELECT file_path, loan_id, COUNT(*)
+FROM staging.bk_mpo.loan_current
+GROUP BY file_path, loan_id
+HAVING COUNT(*) > 1;
+```
+
+### 2. Check for NULL Values
+```sql
+SELECT file_path, loan_id
+FROM staging.bk_mpo.loan_current
+WHERE file_path IS NULL;
+```
+
+### 3. Make Columns NOT NULL
+```sql
+ALTER TABLE staging.bk_mpo.loan_current ALTER COLUMN file_path SET NOT NULL;
+```
+
+### 4. Create Primary Key Constraint
+```sql
+ALTER TABLE staging.bk_mpo.loan_current
+ADD CONSTRAINT loan_current_id_file_path PRIMARY KEY (loan_id, file_path);
+```
+
+## Loan Delinquency History Table
+
+### 1. Validate Uniqueness
+```sql
+SELECT file_path, loan_id, COUNT(*)
+FROM staging.bk_mpo.loan_delinquency_history
+GROUP BY file_path, loan_id
+HAVING COUNT(*) > 1;
+```
+
+### 2. Check for NULL Values
+```sql
+SELECT file_path, loan_id
+FROM staging.bk_mpo.loan_delinquency_history
+WHERE file_path IS NULL;
+```
+
+### 3. Make Columns NOT NULL
+```sql
+ALTER TABLE staging.bk_mpo.loan_delinquency_history ALTER COLUMN file_path SET NOT NULL;
+```
+
+### 4. Create Primary Key Constraint
+```sql
+ALTER TABLE staging.bk_mpo.loan_delinquency_history
+ADD CONSTRAINT loan_delinquency_history_id_file_path PRIMARY KEY (loan_id, file_path);
+```
+
+## Loan Lookup Table
+
+### 1. Validate Uniqueness
+```sql
+SELECT file_path, typecode, type, COUNT(*)
+FROM staging.bk_mpo.loan_lookup
+GROUP BY file_path, typecode, type
+HAVING COUNT(*) > 1;
+```
+
+### 2. Check for NULL Values
+```sql
+SELECT file_path, typecode, type
+FROM staging.bk_mpo.loan_lookup
+WHERE file_path IS NULL
+   OR typecode IS NULL
+   OR type IS NULL;
+```
+
+### 3. Make Columns NOT NULL
+```sql
+ALTER TABLE staging.bk_mpo.loan_lookup ALTER COLUMN file_path SET NOT NULL;
+ALTER TABLE staging.bk_mpo.loan_lookup ALTER COLUMN typecode SET NOT NULL;
+ALTER TABLE staging.bk_mpo.loan_lookup ALTER COLUMN type SET NOT NULL;
+```
+
+### 4. Create Primary Key Constraint
+```sql
+ALTER TABLE staging.bk_mpo.loan_lookup
+ADD CONSTRAINT loan_lookup_history_id_file_path_type PRIMARY KEY (file_path, typecode, type);
+```
+
+## MC Dash Actual Counts Table
+
+### 1. Validate Uniqueness
+```sql
+SELECT file_path, file_name, COUNT(*)
+FROM staging.bk_mpo.mc_dash_actual_counts
+GROUP BY file_path, file_name
+HAVING COUNT(*) > 1;
+```
+
+### 2. Check for NULL Values
+```sql
+SELECT file_path, file_name
+FROM staging.bk_mpo.mc_dash_actual_counts
+WHERE file_path IS NULL
+   OR file_name IS NULL;
+```
+
+### 3. Make Columns NOT NULL
+```sql
+ALTER TABLE staging.bk_mpo.mc_dash_actual_counts ALTER COLUMN file_path SET NOT NULL;
+ALTER TABLE staging.bk_mpo.mc_dash_actual_counts ALTER COLUMN file_name SET NOT NULL;
+```
+
+### 4. Create Primary Key Constraint
+```sql
+ALTER TABLE staging.bk_mpo.mc_dash_actual_counts
+ADD CONSTRAINT mc_dash_actual_counts_file_path_name PRIMARY KEY (file_name, file_path);
+```
+
+---
+**Note**: When implementing primary keys in Databricks:
+- Constraints are enforced during write operations
+- Consider using OPTIMIZE with ZORDER BY on primary key columns for better performance
+- Ensure all constituent columns of the primary key are NOT NULL
