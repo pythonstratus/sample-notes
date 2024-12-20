@@ -1,207 +1,284 @@
-Here's a concise summary for your JIRA ticket:
+-- Check distinct as_of_month values
+SELECT DISTINCT as_of_month 
+FROM bk_mpo_raw.heloc 
+ORDER BY as_of_month;
 
-```
-Primary Key Implementation - Staging Silver Tables
-
-Status: Ready for Testing and Production Implementation
-
-Summary:
-- Successfully implemented primary key constraints for 6 staging silver tables based on Henry's analysis spreadsheet
-- All tables were validated for:
-  * Duplicate records
-  * NULL values in key columns
-  * Data integrity constraints
-
-Tables Implemented:
-1. staging.bk_mpo.loan
-2. staging.bk_mpo.loan_arm
-3. staging.bk_mpo.loan_current
-4. staging.bk_mpo.loan_delinquency_history
-5. staging.bk_mpo.loan_lookup
-6. staging.bk_mpo.mc_dash_actual_counts
-
-Implementation Details:
-- Full implementation script available at: [Insert GitHub Link]
-- Each table underwent NOT NULL constraints enforcement
-- Composite primary keys were created based on business requirements
-- All validation queries are documented in the script
-
-Next Steps:
-1. QA Testing in Staging environment
-2. Production deployment approval
-3. Implementation in Production environment
-
-Note: The implementation follows Databricks best practices for constraint management and data integrity.
-```
+-- Verify source_metadata columns
+SELECT source_metadata.file_path, source_metadata.file_modification_time
+FROM bk_mpo_raw.heloc
+WHERE as_of_month = '<your_as_of_month>'
+LIMIT 5;
 
 
 
-# Database Primary Key Implementation
+-- Check recent metadata updates
+SELECT *
+FROM bk_mpo.raw_source_metadata
+ORDER BY process_date DESC
+LIMIT 10;
 
-This document outlines the process of validating and implementing primary keys for tables migrated from PostgreSQL to Databricks.
+-- Check if reprocess flag is set correctly
+SELECT file_path, reprocess
+FROM bk_mpo.raw_source_metadata
+WHERE file_path = '<your_file_path>';
 
-## Table of Contents
-- [Loan Table Primary Key Implementation](#loan-table)
-- [Loan Arm Table Primary Key Implementation](#loan-arm-table)
-- [Loan Current Table Primary Key Implementation](#loan-current-table)
-- [Loan Delinquency History Table Primary Key Implementation](#loan-delinquency-history-table)
-- [Loan Lookup Table Primary Key Implementation](#loan-lookup-table)
-- [MC Dash Actual Counts Table Primary Key Implementation](#mc-dash-actual-counts-table)
 
-## Loan Table
+-- Compare raw and silver table counts
+SELECT 
+    r.as_of_month,
+    COUNT(*) as raw_count,
+    (SELECT COUNT(*) 
+     FROM bk_mpo.heloc s 
+     WHERE s.as_of_month = r.as_of_month) as silver_count
+FROM bk_mpo_raw.heloc r
+GROUP BY r.as_of_month
+ORDER BY r.as_of_month;
 
-The following steps were taken to implement a composite primary key (loan_id, file_path) for the loan table:
+-- Check for duplicates in silver table
+SELECT as_of_month, COUNT(*)
+FROM bk_mpo.heloc
+GROUP BY as_of_month
+HAVING COUNT(*) > 0;
 
-[Previous loan table implementation remains the same]
 
-## Loan Arm Table
+-- Check specific file processing status
+SELECT *
+FROM bk_mpo.raw_source_metadata
+WHERE file_path = '<your_file_path>';
 
-### 1. Validate Uniqueness
-```sql
-SELECT file_path, loan_id, COUNT(*)
-FROM staging.bk_mpo.loan_arm
-GROUP BY file_path, loan_id
-HAVING COUNT(*) > 1;
-```
+-- Check records for a specific file
+SELECT COUNT(*) 
+FROM bk_mpo.heloc
+WHERE file_path = '<your_file_path>';
 
-### 2. Check for NULL Values
-```sql
-SELECT file_path, loan_id
-FROM staging.bk_mpo.loan_arm
-WHERE file_path IS NULL;
-```
 
-### 3. Make Columns NOT NULL
-```sql
-ALTER TABLE staging.bk_mpo.loan_arm ALTER COLUMN file_path SET NOT NULL;
-```
 
-### 4. Create Primary Key Constraint
-```sql
-ALTER TABLE staging.bk_mpo.loan_arm
-ADD CONSTRAINT loan_arm_id_file_path PRIMARY KEY (loan_id, file_path);
-```
+-- Check the EXCEPT query results
+SELECT DISTINCT mcdash_loan_identifier, as_of_month
+FROM (
+    SELECT mcdash_loan_identifier, as_of_month
+    FROM {raw_database}.{raw_table_name}
+    EXCEPT
+    SELECT mcdash_loan_identifier, as_of_month
+    FROM {silver_database}.{silver_table_name}
+)
+ORDER BY as_of_month;
 
-## Loan Current Table
+-- Count records by as_of_month in both tables
+SELECT 
+    'raw' as source,
+    as_of_month,
+    COUNT(*) as record_count
+FROM {raw_database}.{raw_table_name}
+GROUP BY as_of_month
+UNION ALL
+SELECT 
+    'silver' as source,
+    as_of_month,
+    COUNT(*) as record_count
+FROM {silver_database}.{silver_table_name}
+GROUP BY as_of_month
+ORDER BY as_of_month, source;
 
-### 1. Validate Uniqueness
-```sql
-SELECT file_path, loan_id, COUNT(*)
-FROM staging.bk_mpo.loan_current
-GROUP BY file_path, loan_id
-HAVING COUNT(*) > 1;
-```
 
-### 2. Check for NULL Values
-```sql
-SELECT file_path, loan_id
-FROM staging.bk_mpo.loan_current
-WHERE file_path IS NULL;
-```
 
-### 3. Make Columns NOT NULL
-```sql
-ALTER TABLE staging.bk_mpo.loan_current ALTER COLUMN file_path SET NOT NULL;
-```
+-- Check recent metadata updates with detailed status
+SELECT 
+    process_date,
+    file_path,
+    file_process_state,
+    rows_inserted,
+    reprocess,
+    last_error_msg
+FROM {metadata_table_name}
+WHERE process_date >= current_date() - INTERVAL 7 DAYS
+ORDER BY process_date DESC;
 
-### 4. Create Primary Key Constraint
-```sql
-ALTER TABLE staging.bk_mpo.loan_current
-ADD CONSTRAINT loan_current_id_file_path PRIMARY KEY (loan_id, file_path);
-```
+-- Check failed processes
+SELECT *
+FROM {metadata_table_name}
+WHERE file_process_state = 'FAILED'
+ORDER BY process_date DESC
+LIMIT 10;
 
-## Loan Delinquency History Table
 
-### 1. Validate Uniqueness
-```sql
-SELECT file_path, loan_id, COUNT(*)
-FROM staging.bk_mpo.loan_delinquency_history
-GROUP BY file_path, loan_id
-HAVING COUNT(*) > 1;
-```
+-- Check processing results by as_of_month
+WITH monthly_stats AS (
+    SELECT 
+        as_of_month,
+        COUNT(*) as record_count,
+        MAX(file_modification_time) as latest_modification
+    FROM {silver_database}.{silver_table_name}
+    GROUP BY as_of_month
+)
+SELECT 
+    m.*,
+    meta.file_process_state,
+    meta.rows_inserted,
+    meta.last_error_msg
+FROM monthly_stats m
+LEFT JOIN {metadata_table_name} meta
+    ON meta.process_date = (
+        SELECT MAX(process_date) 
+        FROM {metadata_table_name} 
+        WHERE file_path LIKE CONCAT('%', m.as_of_month, '%')
+    )
+ORDER BY as_of_month DESC;
 
-### 2. Check for NULL Values
-```sql
-SELECT file_path, loan_id
-FROM staging.bk_mpo.loan_delinquency_history
-WHERE file_path IS NULL;
-```
 
-### 3. Make Columns NOT NULL
-```sql
-ALTER TABLE staging.bk_mpo.loan_delinquency_history ALTER COLUMN file_path SET NOT NULL;
-```
+-- Check records that should be updated
+SELECT a.*, b.file_modification_time as existing_modification_time
+FROM {raw_database}.{raw_table_name} a
+JOIN {silver_database}.{silver_table_name} b
+    ON a.mcdash_loan_identifier = b.mcdash_loan_identifier
+    AND a.as_of_month = b.as_of_month
+WHERE a.file_modification_time > b.file_modification_time;
 
-### 4. Create Primary Key Constraint
-```sql
-ALTER TABLE staging.bk_mpo.loan_delinquency_history
-ADD CONSTRAINT loan_delinquency_history_id_file_path PRIMARY KEY (loan_id, file_path);
-```
+-- Verify column updates
+SELECT 
+    as_of_month,
+    COUNT(*) as total_records,
+    COUNT(file_path) as records_with_file_path,
+    COUNT(file_modification_time) as records_with_mod_time,
+    COUNT(ingest_time) as records_with_ingest_time
+FROM {silver_database}.{silver_table_name}
+GROUP BY as_of_month
+ORDER BY as_of_month DESC;
 
-## Loan Lookup Table
 
-### 1. Validate Uniqueness
-```sql
-SELECT file_path, typecode, type, COUNT(*)
-FROM staging.bk_mpo.loan_lookup
-GROUP BY file_path, typecode, type
-HAVING COUNT(*) > 1;
-```
+-- Detailed summary comparison
+SELECT 
+    r.as_of_month,
+    COUNT(DISTINCT r.mcdash_loan_identifier) as raw_distinct_loans,
+    COUNT(DISTINCT s.mcdash_loan_identifier) as silver_distinct_loans,
+    COUNT(DISTINCT r.mcdash_loan_identifier) - COUNT(DISTINCT s.mcdash_loan_identifier) as difference
+FROM {raw_database}.{raw_table_name} r
+LEFT JOIN {silver_database}.{silver_table_name} s
+    ON r.mcdash_loan_identifier = s.mcdash_loan_identifier
+    AND r.as_of_month = s.as_of_month
+GROUP BY r.as_of_month
+HAVING difference != 0
+ORDER BY r.as_of_month;
 
-### 2. Check for NULL Values
-```sql
-SELECT file_path, typecode, type
-FROM staging.bk_mpo.loan_lookup
-WHERE file_path IS NULL
-   OR typecode IS NULL
-   OR type IS NULL;
-```
+-- Process state summary
+SELECT 
+    file_process_state,
+    COUNT(*) as state_count,
+    MIN(process_date) as earliest_date,
+    MAX(process_date) as latest_date,
+    SUM(rows_inserted) as total_rows_inserted
+FROM {metadata_table_name}
+GROUP BY file_process_state;
 
-### 3. Make Columns NOT NULL
-```sql
-ALTER TABLE staging.bk_mpo.loan_lookup ALTER COLUMN file_path SET NOT NULL;
-ALTER TABLE staging.bk_mpo.loan_lookup ALTER COLUMN typecode SET NOT NULL;
-ALTER TABLE staging.bk_mpo.loan_lookup ALTER COLUMN type SET NOT NULL;
-```
 
-### 4. Create Primary Key Constraint
-```sql
-ALTER TABLE staging.bk_mpo.loan_lookup
-ADD CONSTRAINT loan_lookup_history_id_file_path_type PRIMARY KEY (file_path, typecode, type);
-```
+-- Check processing results by status
+SELECT 
+    as_of_month,
+    result as processing_result,
+    COUNT(*) as count
+FROM (
+    SELECT explode(array_zip(as_of_months, results)) as (as_of_month, result)
+    FROM (
+        SELECT 
+            collect_list(as_of_month) as as_of_months,
+            collect_list(result) as results
+        FROM {metadata_table_name}
+        WHERE process_date >= current_date() - INTERVAL 7 DAYS
+    )
+)
+GROUP BY as_of_month, result
+ORDER BY as_of_month DESC;
 
-## MC Dash Actual Counts Table
 
-### 1. Validate Uniqueness
-```sql
-SELECT file_path, file_name, COUNT(*)
-FROM staging.bk_mpo.mc_dash_actual_counts
-GROUP BY file_path, file_name
-HAVING COUNT(*) > 1;
-```
+-- Detailed count comparison with discrepancy check
+WITH source_counts AS (
+    SELECT 
+        as_of_month,
+        COUNT(*) as raw_count,
+        COUNT(DISTINCT mcdash_loan_identifier) as distinct_loans
+    FROM {raw_database}.{raw_table_name}
+    GROUP BY as_of_month
+),
+target_counts AS (
+    SELECT 
+        as_of_month,
+        COUNT(*) as silver_count,
+        COUNT(DISTINCT mcdash_loan_identifier) as distinct_loans
+    FROM {silver_database}.{silver_table_name}
+    GROUP BY as_of_month
+)
+SELECT 
+    COALESCE(s.as_of_month, t.as_of_month) as as_of_month,
+    s.raw_count,
+    t.silver_count,
+    s.distinct_loans as raw_distinct_loans,
+    t.distinct_loans as silver_distinct_loans,
+    s.raw_count - COALESCE(t.silver_count, 0) as count_difference
+FROM source_counts s
+FULL OUTER JOIN target_counts t ON s.as_of_month = t.as_of_month
+ORDER BY as_of_month DESC;
 
-### 2. Check for NULL Values
-```sql
-SELECT file_path, file_name
-FROM staging.bk_mpo.mc_dash_actual_counts
-WHERE file_path IS NULL
-   OR file_name IS NULL;
-```
 
-### 3. Make Columns NOT NULL
-```sql
-ALTER TABLE staging.bk_mpo.mc_dash_actual_counts ALTER COLUMN file_path SET NOT NULL;
-ALTER TABLE staging.bk_mpo.mc_dash_actual_counts ALTER COLUMN file_name SET NOT NULL;
-```
+-- Check recent failures in metadata
+SELECT 
+    file_path,
+    process_date,
+    file_process_state,
+    rows_inserted,
+    last_error_msg
+FROM {metadata_table_name}
+WHERE file_process_state = 'FAILED'
+    AND process_date >= current_date() - INTERVAL 7 DAYS
+ORDER BY process_date DESC;
 
-### 4. Create Primary Key Constraint
-```sql
-ALTER TABLE staging.bk_mpo.mc_dash_actual_counts
-ADD CONSTRAINT mc_dash_actual_counts_file_path_name PRIMARY KEY (file_name, file_path);
-```
+-- Check for any months with mixed success/failure status
+SELECT 
+    as_of_month,
+    COUNT(DISTINCT file_process_state) as distinct_states,
+    COLLECT_LIST(file_process_state) as states,
+    COLLECT_LIST(last_error_msg) as error_messages
+FROM {metadata_table_name}
+WHERE process_date >= current_date() - INTERVAL 7 DAYS
+GROUP BY as_of_month
+HAVING COUNT(DISTINCT file_process_state) > 1
+ORDER BY as_of_month DESC;
 
----
-**Note**: When implementing primary keys in Databricks:
-- Constraints are enforced during write operations
-- Consider using OPTIMIZE with ZORDER BY on primary key columns for better performance
-- Ensure all constituent columns of the primary key are NOT NULL
+
+-- Verify data consistency between raw and silver
+SELECT 
+    'Inconsistent Records' as check_type,
+    r.as_of_month,
+    r.mcdash_loan_identifier,
+    r.file_modification_time as raw_mod_time,
+    s.file_modification_time as silver_mod_time
+FROM {raw_database}.{raw_table_name} r
+LEFT JOIN {silver_database}.{silver_table_name} s
+    ON r.mcdash_loan_identifier = s.mcdash_loan_identifier
+    AND r.as_of_month = s.as_of_month
+WHERE r.file_modification_time != s.file_modification_time
+    OR (r.file_modification_time IS NULL) != (s.file_modification_time IS NULL)
+ORDER BY r.as_of_month DESC, r.mcdash_loan_identifier
+LIMIT 100;
+
+
+-- Check processing status summary
+WITH status_summary AS (
+    SELECT 
+        process_date,
+        file_process_state,
+        rows_inserted,
+        CASE 
+            WHEN file_process_state = 'FAILED' THEN last_error_msg
+            ELSE NULL
+        END as error_message
+    FROM {metadata_table_name}
+    WHERE process_date >= current_date() - INTERVAL 7 DAYS
+)
+SELECT 
+    file_process_state,
+    COUNT(*) as count,
+    SUM(rows_inserted) as total_rows_inserted,
+    COLLECT_LIST(error_message) as unique_errors
+FROM status_summary
+GROUP BY file_process_state
+ORDER BY count DESC;
