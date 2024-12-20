@@ -1,3 +1,41 @@
+Here's a concise summary for your JIRA ticket:
+
+```
+Primary Key Implementation - Staging Silver Tables
+
+Status: Ready for Testing and Production Implementation
+
+Summary:
+- Successfully implemented primary key constraints for 6 staging silver tables based on Henry's analysis spreadsheet
+- All tables were validated for:
+  * Duplicate records
+  * NULL values in key columns
+  * Data integrity constraints
+
+Tables Implemented:
+1. staging.bk_mpo.loan
+2. staging.bk_mpo.loan_arm
+3. staging.bk_mpo.loan_current
+4. staging.bk_mpo.loan_delinquency_history
+5. staging.bk_mpo.loan_lookup
+6. staging.bk_mpo.mc_dash_actual_counts
+
+Implementation Details:
+- Full implementation script available at: [Insert GitHub Link]
+- Each table underwent NOT NULL constraints enforcement
+- Composite primary keys were created based on business requirements
+- All validation queries are documented in the script
+
+Next Steps:
+1. QA Testing in Staging environment
+2. Production deployment approval
+3. Implementation in Production environment
+
+Note: The implementation follows Databricks best practices for constraint management and data integrity.
+```
+
+
+
 # Database Primary Key Implementation
 
 This document outlines the process of validating and implementing primary keys for tables migrated from PostgreSQL to Databricks.
