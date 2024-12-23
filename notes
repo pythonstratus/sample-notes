@@ -1,1 +1,86 @@
-sqitch add tables/sv3_rpt.activity_snapshot,tables/sv3_rpt.activity_upsert --note "description of your change"
+Looking at your table mapping configuration, I can suggest several optimizations to help with the memory issues:
+
+1. Parallel Load Configuration:
+Your current setup uses "ranges" with monthly_reporting_period, but could be optimized. Instead of:
+```json
+"parallel-load": {
+    "type": "ranges",
+    "columns": [
+        "monthly_reporting_period"
+    ]
+}
+```
+
+Try this modified approach:
+```json
+"parallel-load": {
+    "type": "partitions-auto",
+    "number-of-partitions": 8,
+    "collection-count-from-metadata": true,
+    "max-records-skip-per-page": 1000000
+}
+```
+
+2. Add Task Settings:
+Add these task settings to better manage memory:
+```json
+{
+    "TargetMetadata": {
+        "BatchApplyEnabled": true,
+        "BatchApplyPreserveTransaction": false,
+        "BatchSize": 25000,
+        "CommitRate": 10000
+    },
+    "FullLoadSettings": {
+        "MaxFullLoadSubTasks": 8,
+        "TransactionConsistencyTimeout": 600,
+        "CommitRate": 10000
+    },
+    "ControlTablesSettings": {
+        "ControlSchema": "dms_control",
+        "HistoryTimeslotInMinutes": 5
+    }
+}
+```
+
+3. Optimize your date range filtering:
+Instead of a single large range (2000-01-01 to 2001-12-01), break it into smaller chunks:
+```json
+"filter-conditions": [
+    {
+        "filter-operator": "between",
+        "start-value": "2000-01-01",
+        "end-value": "2000-06-30"
+    }
+]
+```
+Then run multiple tasks for different date ranges.
+
+4. Add LOB Settings:
+If you have any large object columns:
+```json
+"LobSettings": {
+    "LimitedSizeLobMode": true,
+    "LobMaxSize": 32,
+    "BulkMaxSize": 1024
+}
+```
+
+5. Consider adding error handling:
+```json
+"ErrorBehavior": {
+    "DataErrorPolicy": "LOG_ERROR",
+    "DataTruncationPolicy": "LOG_ERROR",
+    "DataErrorEscalationPolicy": "SUSPEND_TABLE",
+    "DataErrorEscalationCount": 50
+}
+```
+
+Key recommendations:
+1. Use auto-partitioning instead of manual ranges
+2. Increase the number of subtasks (MaxFullLoadSubTasks)
+3. Adjust batch sizes down to reduce memory pressure
+4. Consider breaking the migration into smaller time chunks
+5. Monitor the task with CloudWatch metrics to identify bottlenecks
+
+Would you like me to provide a complete consolidated JSON configuration incorporating all these changes?
