@@ -84,3 +84,79 @@ Key recommendations:
 5. Monitor the task with CloudWatch metrics to identify bottlenecks
 
 Would you like me to provide a complete consolidated JSON configuration incorporating all these changes?
+
+
+
+{
+ "rules": [
+   {
+     "rule-type": "selection",
+     "rule-id": "1",
+     "rule-name": "1",
+     "object-locator": {
+       "schema-name": "fann_lqd",
+       "table-name": "loan_performance_wu_no_lqd",
+       "table-type": "all"
+     },
+     "rule-action": "include",
+     "filters": [
+       {
+         "filter-type": "source",
+         "column-name": "monthly_reporting_period",
+         "filter-conditions": [
+           {
+             "filter-operator": "between", 
+             "start-value": "2000-01-01",
+             "end-value": "2001-12-01"
+           }
+         ]
+       }
+     ]
+   },
+   {
+     "rule-type": "table-settings",
+     "rule-id": "2",
+     "rule-name": "2", 
+     "object-locator": {
+       "schema-name": "fann_lqd",
+       "table-name": "loan_performance_wu_no_lqd",
+       "table-type": "all"
+     },
+     "parallel-load": {
+       "type": "partitions-auto",
+       "number-of-partitions": 8,
+       "collection-count-from-metadata": true,
+       "max-records-skip-per-page": 1000000
+     },
+     "target-table-preparation-mode": "DROP_AND_CREATE",
+     "task-settings": {
+       "TargetMetadata": {
+         "BatchApplyEnabled": true,
+         "BatchApplyPreserveTransaction": false,
+         "BatchSize": 25000,
+         "CommitRate": 10000
+       },
+       "FullLoadSettings": {
+         "MaxFullLoadSubTasks": 8,
+         "TransactionConsistencyTimeout": 600,
+         "CommitRate": 10000
+       },
+       "ControlTablesSettings": {
+         "ControlSchema": "dms_control",
+         "HistoryTimeslotInMinutes": 5
+       },
+       "LobSettings": {
+         "LimitedSizeLobMode": true,
+         "LobMaxSize": 32,
+         "BulkMaxSize": 1024
+       },
+       "ErrorBehavior": {
+         "DataErrorPolicy": "LOG_ERROR",
+         "DataTruncationPolicy": "LOG_ERROR",
+         "DataErrorEscalationPolicy": "SUSPEND_TABLE",
+         "DataErrorEscalationCount": 50
+       }
+     }
+   }
+ ]
+}
