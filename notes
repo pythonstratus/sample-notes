@@ -1,88 +1,81 @@
-import psycopg2
-import os
-import subprocess
-from datetime import datetime
-import logging
-from concurrent.futures import ThreadPoolExecutor
+File Processing Overview (00:00 - 09:56)
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+Files are copied from the DT work DW file transfer NIC folder.
+The path for the folder can be shared.
+Processed files are archived in DT data, which is located in source data.
+Archive path: DD work to DT data.
 
-class PostgresExport:
-    def __init__(self, db_params, table_name, output_dir, rows_per_partition=10000000):
-        self.db_params = db_params
-        self.table_name = table_name
-        self.output_dir = output_dir
-        self.rows_per_partition = rows_per_partition
-        os.makedirs(self.output_dir, exist_ok=True)
+Daily File Management
 
-    def get_total_rows(self):
-        with psycopg2.connect(**self.db_params) as conn:
-            with conn.cursor() as cur:
-                cur.execute(f"SELECT COUNT(*) FROM {self.table_name}")
-                return cur.fetchone()[0]
+The pipeline runs from Monday through Saturday.
+No files are generated on Sunday or Monday.
+Files are converted from XML to CSV during processing.
+CSV files are not needed and should be deleted.
 
-    def export_partition(self, partition):
-        start_offset, partition_id = partition
-        output_file = os.path.join(self.output_dir, f"{self.table_name}_part_{partition_id}.csv")
-        
-        copy_sql = f"""
-            COPY (
-                SELECT * FROM {self.table_name}
-                OFFSET {start_offset} 
-                LIMIT {self.rows_per_partition}
-            ) TO STDOUT WITH (FORMAT CSV, HEADER)
-        """
-        
-        try:
-            env = os.environ.copy()
-            env['PGPASSWORD'] = self.db_params['password']
-            
-            psql_command = [
-                'psql',
-                '-h', self.db_params['host'],
-                '-p', str(self.db_params['port']),
-                '-U', self.db_params['user'],
-                '-d', self.db_params['database'],
-                '-c', copy_sql
-            ]
-            
-            with open(output_file, 'w') as f:
-                subprocess.run(psql_command, stdout=f, env=env, check=True)
-            
-            logger.info(f"Exported partition {partition_id}")
-            
-        except Exception as e:
-            logger.error(f"Error exporting partition {partition_id}: {str(e)}")
-            raise
+File Deletion Process
 
-    def export_all(self, max_workers=4):
-        start_time = datetime.now()
-        total_rows = self.get_total_rows()
-        num_partitions = (total_rows + self.rows_per_partition - 1) // self.rows_per_partition
-        
-        partitions = [(i * self.rows_per_partition, i) for i in range(num_partitions)]
-        
-        logger.info(f"Starting export of {self.table_name}: {total_rows} rows in {num_partitions} partitions")
-        
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            list(executor.map(self.export_partition, partitions))
-        
-        logger.info(f"Export completed in {datetime.now() - start_time}")
+A script is available to delete CSV files.
+Only CSV files will be deleted, nothing else.
+Care must be taken to avoid deleting files in the wrong folders.
 
-if __name__ == "__main__":
-    db_params = {
-        "host": "127.0.0.1",  # or your actual host
-        "database": "your_database",
-        "user": "your_user",
-        "password": "your_password",
-        "port": 5432
-    }
-    
-    exporter = PostgresExport(
-        db_params=db_params,
-        table_name="your_table",
-        output_dir="csv_output"
-    )
-    
-    exporter.export_all(max_workers=4)
+Current Tasks
+
+Copy files from the DT work folder NIC to the source data DT data folder.
+Ensure to copy to the correct incremental folder.
+Anna is working on ingesting files into Databricks.
+She is processing files from previous days.
+
+File Transfer Process (09:56 - 14:32)
+
+Copy files from the source data to TT work.
+A script can help automate the process.
+There is a function to pull down files and process results.
+The archive function is part of the process.
+
+Script Details
+
+Two programs of interest:
+Get latest Nick files.
+Nick.py.
+The QSA approach is more robust.
+Includes a full program for archiving.
+
+File Handling
+
+Copy XML files from the DD work file transfer Nick folder to the source data files folder.
+CSV files should be excluded.
+
+Availability
+
+The speaker will be out of town, going to Guatemala.
+Returning Sunday night.
+Available for questions for another three hours.
+
+
+
+DMS:
+DMS Issues (00:01 - 08:45)
+
+DMS unable to read foreign table directly.
+Created a view pointing to the foreign table.
+View is local to the database.
+Connection timeout errors encountered.
+Complaints about column widths during parquet file generation.
+Issue noted as unnecessary since writing to a parquet file, not a table.
+
+Data Export Attempts
+
+Attempting to export table using a copy command in Postgres.
+Data being dumped into a CSV.
+Created a folder named "final query dumps" on the server.
+PG dump failed due to super user requirement.
+Command will be provided to Santosh for execution.
+
+Monthly Reporting Period Analysis
+
+Insight into monthly reporting periods initiated.
+Query to count records for each month.
+Need to group by monthly reporting period.
+Data spans from the year 2000 to 2018.
+Plan to generate one CSV per year.
+Discussion on the number of records: approximately 7.2 million.
