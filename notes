@@ -8,61 +8,33 @@ from concurrent.futures import ThreadPoolExecutor
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class ForeignTableExport:
-    def __init__(self, db_params, table_name, output_dir):
+class PostgresExport:
+    def __init__(self, db_params, table_name, output_dir, rows_per_partition=10000000):
         self.db_params = db_params
         self.table_name = table_name
         self.output_dir = output_dir
+        self.rows_per_partition = rows_per_partition
         os.makedirs(self.output_dir, exist_ok=True)
 
-    def get_ctid_ranges(self):
-        """Get the ctid block number ranges for partitioning."""
+    def get_total_rows(self):
         with psycopg2.connect(**self.db_params) as conn:
             with conn.cursor() as cur:
-                # Get block number range and total rows
-                cur.execute(f"""
-                    SELECT COUNT(*),
-                           MIN(ctid::text::point[0]::bigint),
-                           MAX(ctid::text::point[0]::bigint)
-                    FROM {self.table_name}
-                """)
-                total_rows, min_block, max_block = cur.fetchone()
-                
-                # Aim for chunks of approximately 10 million rows
-                # Adjust block_step based on your table's density
-                estimated_rows_per_block = total_rows / (max_block - min_block + 1)
-                target_rows_per_partition = 10000000
-                blocks_needed = target_rows_per_partition / estimated_rows_per_block
-                num_partitions = max(1, int(total_rows / target_rows_per_partition))
-                
-                block_step = max(1, (max_block - min_block) // num_partitions)
-                
-                ranges = []
-                current_block = min_block
-                while current_block <= max_block:
-                    next_block = min(current_block + block_step, max_block + 1)
-                    ranges.append((current_block, next_block))
-                    current_block = next_block
-                
-                return ranges
+                cur.execute(f"SELECT COUNT(*) FROM {self.table_name}")
+                return cur.fetchone()[0]
 
-    def export_partition(self, block_range):
-        """Export a partition using COPY command based on ctid range."""
-        min_block, max_block = block_range
-        partition_id = f"{min_block}_{max_block}"
-        output_file = os.path.join(self.output_dir, f"{self.table_name}_block_{partition_id}.csv")
+    def export_partition(self, partition):
+        start_offset, partition_id = partition
+        output_file = os.path.join(self.output_dir, f"{self.table_name}_part_{partition_id}.csv")
+        
+        copy_sql = f"""
+            COPY (
+                SELECT * FROM {self.table_name}
+                OFFSET {start_offset} 
+                LIMIT {self.rows_per_partition}
+            ) TO STDOUT WITH (FORMAT CSV, HEADER)
+        """
         
         try:
-            # Construct COPY command using ctid range
-            copy_sql = f"""
-                COPY (
-                    SELECT * 
-                    FROM {self.table_name}
-                    WHERE ctid::text::point[0]::bigint >= {min_block}
-                    AND ctid::text::point[0]::bigint < {max_block}
-                ) TO STDOUT WITH (FORMAT CSV, HEADER)
-            """
-            
             env = os.environ.copy()
             env['PGPASSWORD'] = self.db_params['password']
             
@@ -78,44 +50,38 @@ class ForeignTableExport:
             with open(output_file, 'w') as f:
                 subprocess.run(psql_command, stdout=f, env=env, check=True)
             
-            # Get row count of exported file (optional)
-            with open(output_file, 'r') as f:
-                row_count = sum(1 for _ in f) - 1  # subtract 1 for header
-            
-            logger.info(f"Exported partition {partition_id} with {row_count} rows")
+            logger.info(f"Exported partition {partition_id}")
             
         except Exception as e:
             logger.error(f"Error exporting partition {partition_id}: {str(e)}")
             raise
 
     def export_all(self, max_workers=4):
-        """Export all partitions in parallel."""
         start_time = datetime.now()
-        logger.info(f"Starting export of {self.table_name} at {start_time}")
+        total_rows = self.get_total_rows()
+        num_partitions = (total_rows + self.rows_per_partition - 1) // self.rows_per_partition
         
-        block_ranges = self.get_ctid_ranges()
-        logger.info(f"Will create {len(block_ranges)} partitions")
+        partitions = [(i * self.rows_per_partition, i) for i in range(num_partitions)]
+        
+        logger.info(f"Starting export of {self.table_name}: {total_rows} rows in {num_partitions} partitions")
         
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            list(executor.map(self.export_partition, block_ranges))
+            list(executor.map(self.export_partition, partitions))
         
-        end_time = datetime.now()
-        duration = end_time - start_time
-        logger.info(f"Export completed in {duration}")
+        logger.info(f"Export completed in {datetime.now() - start_time}")
 
-# Usage example
 if __name__ == "__main__":
     db_params = {
-        "host": "your_host",
+        "host": "127.0.0.1",  # or your actual host
         "database": "your_database",
         "user": "your_user",
         "password": "your_password",
         "port": 5432
     }
     
-    exporter = ForeignTableExport(
+    exporter = PostgresExport(
         db_params=db_params,
-        table_name="your_foreign_table",
+        table_name="your_table",
         output_dir="csv_output"
     )
     
