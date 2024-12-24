@@ -1,162 +1,114 @@
-Looking at your table mapping configuration, I can suggest several optimizations to help with the memory issues:
+import psycopg2
+import os
+import subprocess
+from datetime import datetime
+import logging
+from concurrent.futures import ThreadPoolExecutor
 
-1. Parallel Load Configuration:
-Your current setup uses "ranges" with monthly_reporting_period, but could be optimized. Instead of:
-```json
-"parallel-load": {
-    "type": "ranges",
-    "columns": [
-        "monthly_reporting_period"
-    ]
-}
-```
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-Try this modified approach:
-```json
-"parallel-load": {
-    "type": "partitions-auto",
-    "number-of-partitions": 8,
-    "collection-count-from-metadata": true,
-    "max-records-skip-per-page": 1000000
-}
-```
+class FastPostgresExport:
+    def __init__(self, db_params, table_name, partition_column, output_dir):
+        self.db_params = db_params
+        self.table_name = table_name
+        self.partition_column = partition_column
+        self.output_dir = output_dir
+        os.makedirs(self.output_dir, exist_ok=True)
 
-2. Add Task Settings:
-Add these task settings to better manage memory:
-```json
-{
-    "TargetMetadata": {
-        "BatchApplyEnabled": true,
-        "BatchApplyPreserveTransaction": false,
-        "BatchSize": 25000,
-        "CommitRate": 10000
-    },
-    "FullLoadSettings": {
-        "MaxFullLoadSubTasks": 8,
-        "TransactionConsistencyTimeout": 600,
-        "CommitRate": 10000
-    },
-    "ControlTablesSettings": {
-        "ControlSchema": "dms_control",
-        "HistoryTimeslotInMinutes": 5
+    def get_partition_ranges(self):
+        """Get the partition ranges for parallel processing."""
+        with psycopg2.connect(**self.db_params) as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                    SELECT MIN({self.partition_column}), 
+                           MAX({self.partition_column})
+                    FROM {self.table_name}
+                """)
+                min_val, max_val = cur.fetchone()
+                
+                # Get total rows to calculate partitions
+                cur.execute(f"SELECT COUNT(*) FROM {self.table_name}")
+                total_rows = cur.fetchone()[0]
+                
+                # Aim for ~100 million rows per partition
+                rows_per_partition = 100000000
+                num_partitions = max(1, total_rows // rows_per_partition)
+                
+        step = (max_val - min_val) / num_partitions
+        ranges = [(min_val + (step * i), min_val + (step * (i + 1))) 
+                 for i in range(num_partitions)]
+        return ranges
+
+    def export_partition(self, partition_range):
+        """Export a partition using COPY command."""
+        min_val, max_val = partition_range
+        partition_id = f"{min_val:.0f}_{max_val:.0f}"
+        output_file = os.path.join(self.output_dir, f"{self.table_name}_partition_{partition_id}.csv")
+        
+        try:
+            # Construct COPY command
+            copy_sql = f"""
+                COPY (
+                    SELECT *
+                    FROM {self.table_name}
+                    WHERE {self.partition_column} >= {min_val}
+                    AND {self.partition_column} < {max_val}
+                ) TO STDOUT WITH (FORMAT CSV, HEADER)
+            """
+            
+            # Use psql command-line tool for maximum performance
+            env = os.environ.copy()
+            env['PGPASSWORD'] = self.db_params['password']
+            
+            psql_command = [
+                'psql',
+                '-h', self.db_params['host'],
+                '-p', str(self.db_params['port']),
+                '-U', self.db_params['user'],
+                '-d', self.db_params['database'],
+                '-c', copy_sql
+            ]
+            
+            with open(output_file, 'w') as f:
+                subprocess.run(psql_command, stdout=f, env=env, check=True)
+            
+            logger.info(f"Successfully exported partition {partition_id}")
+            
+        except Exception as e:
+            logger.error(f"Error exporting partition {partition_id}: {str(e)}")
+            raise
+
+    def export_all(self, max_workers=4):
+        """Export all partitions in parallel."""
+        start_time = datetime.now()
+        logger.info(f"Starting export of {self.table_name} at {start_time}")
+        
+        partition_ranges = self.get_partition_ranges()
+        logger.info(f"Will create {len(partition_ranges)} partitions")
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            list(executor.map(self.export_partition, partition_ranges))
+        
+        end_time = datetime.now()
+        duration = end_time - start_time
+        logger.info(f"Export completed in {duration}")
+
+# Usage example
+if __name__ == "__main__":
+    db_params = {
+        "host": "your_host",
+        "database": "your_database",
+        "user": "your_user",
+        "password": "your_password",
+        "port": 5432
     }
-}
-```
-
-3. Optimize your date range filtering:
-Instead of a single large range (2000-01-01 to 2001-12-01), break it into smaller chunks:
-```json
-"filter-conditions": [
-    {
-        "filter-operator": "between",
-        "start-value": "2000-01-01",
-        "end-value": "2000-06-30"
-    }
-]
-```
-Then run multiple tasks for different date ranges.
-
-4. Add LOB Settings:
-If you have any large object columns:
-```json
-"LobSettings": {
-    "LimitedSizeLobMode": true,
-    "LobMaxSize": 32,
-    "BulkMaxSize": 1024
-}
-```
-
-5. Consider adding error handling:
-```json
-"ErrorBehavior": {
-    "DataErrorPolicy": "LOG_ERROR",
-    "DataTruncationPolicy": "LOG_ERROR",
-    "DataErrorEscalationPolicy": "SUSPEND_TABLE",
-    "DataErrorEscalationCount": 50
-}
-```
-
-Key recommendations:
-1. Use auto-partitioning instead of manual ranges
-2. Increase the number of subtasks (MaxFullLoadSubTasks)
-3. Adjust batch sizes down to reduce memory pressure
-4. Consider breaking the migration into smaller time chunks
-5. Monitor the task with CloudWatch metrics to identify bottlenecks
-
-Would you like me to provide a complete consolidated JSON configuration incorporating all these changes?
-
-
-
-{
- "rules": [
-   {
-     "rule-type": "selection",
-     "rule-id": "1",
-     "rule-name": "1",
-     "object-locator": {
-       "schema-name": "fann_lqd",
-       "table-name": "loan_performance_wu_no_lqd",
-       "table-type": "all"
-     },
-     "rule-action": "include",
-     "filters": [
-       {
-         "filter-type": "source",
-         "column-name": "monthly_reporting_period",
-         "filter-conditions": [
-           {
-             "filter-operator": "between", 
-             "start-value": "2000-01-01",
-             "end-value": "2001-12-01"
-           }
-         ]
-       }
-     ]
-   },
-   {
-     "rule-type": "table-settings",
-     "rule-id": "2",
-     "rule-name": "2", 
-     "object-locator": {
-       "schema-name": "fann_lqd",
-       "table-name": "loan_performance_wu_no_lqd",
-       "table-type": "all"
-     },
-     "parallel-load": {
-       "type": "partitions-auto",
-       "number-of-partitions": 8,
-       "collection-count-from-metadata": true,
-       "max-records-skip-per-page": 1000000
-     },
-     "target-table-preparation-mode": "DROP_AND_CREATE",
-     "task-settings": {
-       "TargetMetadata": {
-         "BatchApplyEnabled": true,
-         "BatchApplyPreserveTransaction": false,
-         "BatchSize": 25000,
-         "CommitRate": 10000
-       },
-       "FullLoadSettings": {
-         "MaxFullLoadSubTasks": 8,
-         "TransactionConsistencyTimeout": 600,
-         "CommitRate": 10000
-       },
-       "ControlTablesSettings": {
-         "ControlSchema": "dms_control",
-         "HistoryTimeslotInMinutes": 5
-       },
-       "LobSettings": {
-         "LimitedSizeLobMode": true,
-         "LobMaxSize": 32,
-         "BulkMaxSize": 1024
-       },
-       "ErrorBehavior": {
-         "DataErrorPolicy": "LOG_ERROR",
-         "DataTruncationPolicy": "LOG_ERROR",
-         "DataErrorEscalationPolicy": "SUSPEND_TABLE",
-         "DataErrorEscalationCount": 50
-       }
-     }
-   }
- ]
-}
+    
+    exporter = FastPostgresExport(
+        db_params=db_params,
+        table_name="your_table",
+        partition_column="id",  # or any other numeric column suitable for partitioning
+        output_dir="csv_output"
+    )
+    
+    exporter.export_all(max_workers=4)
