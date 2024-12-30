@@ -1,6 +1,112 @@
-1. This difference wasn't explicitly requested but rather represents a natural architectural transformation during the migration to Databricks. The change from file_id to file_path reflects a shift from a normalized relational database structure to a denormalized data lake structure, which is more appropriate for the Databricks environment. The direct inclusion of file_path in the HELOC table eliminates the need for joins and simplifies data access patterns.
+from pyspark.sql import SparkSession
+from datetime import datetime
+import pandas as pd
+from IPython.display import display, HTML, Markdown
+import json
 
+def generate_schema_readme(schema_name="bk_MPO"):
+    """
+    Generate a comprehensive README dashboard for a Databricks schema
+    """
+    spark = SparkSession.builder.getOrCreate()
+    
+    def get_table_info():
+        """Get information about all tables in the schema"""
+        query = f"""
+        SELECT table_name, 
+               creation_time,
+               last_modified_time
+        FROM {schema_name}.INFORMATION_SCHEMA.TABLES
+        """
+        return spark.sql(query).toPandas()
+    
+    def get_table_stats(table_name):
+        """Get detailed statistics for a specific table"""
+        full_table_name = f"{schema_name}.{table_name}"
+        df = spark.table(full_table_name)
+        
+        # Get row count
+        row_count = df.count()
+        
+        # Get column information
+        columns = df.columns
+        col_count = len(columns)
+        
+        # Get sample data types
+        dtypes = {col: str(df.schema[col].dataType) for col in columns}
+        
+        # Get last updated timestamp using a sample row
+        last_updated = df.agg({"*": "max"}).collect()[0][0]
+        
+        return {
+            "row_count": row_count,
+            "column_count": col_count,
+            "columns": dtypes,
+            "last_updated": last_updated
+        }
+    
+    # Get all tables
+    tables_df = get_table_info()
+    
+    # Generate HTML output
+    html_output = f"""
+    <div style="padding: 20px;">
+        <h1>{schema_name} Schema Documentation</h1>
+        <p>Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+        
+        <h2>Schema Overview</h2>
+        <ul>
+            <li>Total Tables: {len(tables_df)}</li>
+            <li>Last Schema Update: {tables_df['last_modified_time'].max()}</li>
+        </ul>
+        
+        <h2>Table Details</h2>
+    """
+    
+    # Generate detailed table information
+    for _, row in tables_df.iterrows():
+        table_name = row['table_name']
+        stats = get_table_stats(table_name)
+        
+        html_output += f"""
+        <details>
+            <summary style="cursor: pointer; padding: 10px; background-color: #f0f0f0; margin: 5px 0;">
+                <strong>{table_name}</strong> - {stats['row_count']:,} rows, {stats['column_count']} columns
+            </summary>
+            <div style="padding: 10px; margin-left: 20px;">
+                <p>Created: {row['creation_time']}</p>
+                <p>Last Modified: {row['last_modified_time']}</p>
+                <p>Last Data Update: {stats['last_updated']}</p>
+                
+                <h4>Columns:</h4>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <th style="text-align: left; padding: 5px; border: 1px solid #ddd;">Column Name</th>
+                        <th style="text-align: left; padding: 5px; border: 1px solid #ddd;">Data Type</th>
+                    </tr>
+        """
+        
+        for col_name, dtype in stats['columns'].items():
+            html_output += f"""
+                    <tr>
+                        <td style="padding: 5px; border: 1px solid #ddd;">{col_name}</td>
+                        <td style="padding: 5px; border: 1px solid #ddd;">{dtype}</td>
+                    </tr>
+            """
+            
+        html_output += """
+                </table>
+            </div>
+        </details>
+        """
+    
+    html_output += "</div>"
+    
+    # Display the dashboard
+    display(HTML(html_output))
 
-2. The as_of_month values (485, 486, etc.) in the loan_month table represent a business-specific or legacy date encoding format that was maintained during the migration to Databricks to ensure consistency with existing processes and data integrity. This format predates the migration and wasn't changed since it's consistently used in both PostgreSQL and Databricks environments. The difference in format compared to other tables is not related to the file_path availability but rather reflects a historical or business-specific way of tracking loan months that the system continues to use.
+# Example usage
+generate_schema_readme("bk_MPO")
 
-3. The file_path column in loan_month_loss_mit is required for consistency since it's a standard field across all bk_mpo tables. This standardization helps maintain a uniform data structure and simplifies data access patterns across the MPO data model in Databricks. The change to include file_path is appropriate as it aligns with the established convention across related tables in the same domain.
+# Optional: Save the documentation to a notebook-level variable for persistence
+dbutils.notebook.exit({"last_generated": datetime.now().isoformat()})
