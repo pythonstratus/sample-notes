@@ -134,12 +134,46 @@ def generate_schema_readme(schema_name="bk_MPO", database="staging"):
     # Generate HTML output
     tables = get_table_info()
     html_output = f"""
-    <div style="padding: 20px;">
+    <div style="padding: 20px; max-width: 100%; width: 100%;">
+        <style>
+            .schema-table {{
+                width: 100%;
+                border-collapse: collapse;
+                table-layout: fixed;
+            }}
+            .schema-table th, .schema-table td {{
+                padding: 8px;
+                border: 1px solid #ddd;
+                overflow: auto;
+                word-wrap: break-word;
+            }}
+            .schema-table th {{
+                background-color: #f5f5f5;
+                font-weight: bold;
+            }}
+            .column-name {{
+                width: 20%;
+            }}
+            .data-type {{
+                width: 20%;
+            }}
+            .statistics {{
+                width: 60%;
+            }}
+            details {{
+                margin-bottom: 10px;
+                width: 100%;
+            }}
+            details > div {{
+                margin: 10px 0;
+                width: 100%;
+            }}
+        </style>
         <h1>{schema_name} Schema Documentation</h1>
         <p>Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
         
         <h2>Schema Overview</h2>
-        <ul>
+        <ul style="margin-bottom: 20px;">
             <li>Total Tables: {len(tables)}</li>
             <li>Database: {database}</li>
             <li>Schema: {schema_name}</li>
@@ -155,19 +189,19 @@ def generate_schema_readme(schema_name="bk_MPO", database="staging"):
             
             html_output += f"""
             <details>
-                <summary style="cursor: pointer; padding: 10px; background-color: #f0f0f0; margin: 5px 0;">
+                <summary style="cursor: pointer; padding: 10px; background-color: #f0f0f0; margin: 5px 0; width: 100%; display: block;">
                     <strong>{table_name}</strong> - {stats['row_count']:,} rows, {stats['column_count']} columns
                 </summary>
-                <div style="padding: 10px; margin-left: 20px;">
+                <div style="padding: 10px; width: 100%;">
                     <p>Description: {description if description else 'No description available'}</p>
                     <p>Last Modified: {stats['last_modified']}</p>
                     
                     <h4>Columns:</h4>
-                    <table style="width: 100%; border-collapse: collapse;">
+                    <table class="schema-table">
                         <tr>
-                            <th style="text-align: left; padding: 5px; border: 1px solid #ddd;">Column Name</th>
-                            <th style="text-align: left; padding: 5px; border: 1px solid #ddd;">Data Type</th>
-                            <th style="text-align: left; padding: 5px; border: 1px solid #ddd;">Statistics</th>
+                            <th class="column-name">Column Name</th>
+                            <th class="data-type">Data Type</th>
+                            <th class="statistics">Statistics</th>
                         </tr>
             """
             
@@ -202,136 +236,3 @@ def generate_schema_readme(schema_name="bk_MPO", database="staging"):
 
 # Example usage
 # generate_schema_readme("bk_MPO", "staging")
-
-
-
-************************************************************************************
-# Databricks Schema README Generator
-
-## Overview
-This tool generates an interactive HTML dashboard within Databricks notebooks that serves as a comprehensive documentation for your schemas and tables. It provides a self-updating, explorable interface for data discovery and documentation.
-
-## Key Features
-
-### 1. Schema-Level Information
-- Total number of tables in the schema
-- Database and schema identification
-- Generation timestamp for freshness tracking
-
-### 2. Table-Level Details
-- Row counts and column counts for each table
-- Last modification timestamps from table history
-- Expandable/collapsible interface for each table
-- Automatic exclusion of system tables (prefixed with '_')
-
-### 3. Column-Level Analytics
-Based on data type, the tool provides different relevant statistics:
-
-#### Numeric Columns
-- Completeness percentage
-- Null value counts
-- Value ranges (min/max)
-
-#### String Columns
-- Completeness percentage
-- Null value counts
-- Cardinality (unique value counts)
-
-#### Date/Timestamp Columns
-- Completeness percentage
-- Null value counts
-- Time span coverage (earliest to latest)
-
-## Benefits of Using This README Generator
-
-### 1. Data Discovery
-- **Quick Overview**: Instantly understand schema structure and contents
-- **Interactive Exploration**: Expand only tables of interest
-- **Type-Aware Statistics**: Relevant metrics based on column types
-
-### 2. Data Quality Monitoring
-- **Completeness Tracking**: Monitor null values and data population
-- **Range Validation**: Identify potential anomalies in value ranges
-- **Cardinality Analysis**: Understand string column distributions
-
-### 3. Documentation
-- **Self-Updating**: Statistics always reflect current data state
-- **Consistent Format**: Standardized documentation across schemas
-- **Comprehensive Coverage**: All tables and columns documented
-
-### 4. Compatibility
-- Works with any Databricks schema
-- Compatible with Delta and non-Delta tables
-- Handles various data types appropriately
-- Platform-agnostic within Databricks (SQL, Python, R notebooks)
-
-### 5. Maintenance Benefits
-- **Schema Evolution**: Automatically adapts to schema changes
-- **No External Dependencies**: Uses only built-in Databricks features
-- **Error Handling**: Graceful handling of access issues and missing tables
-
-## Usage
-
-### Basic Usage
-```python
-generate_schema_readme("your_schema_name", "your_database")
-```
-
-### Example Implementation
-1. Create a new notebook named "Schema README"
-2. Add the generator code
-3. Schedule to run daily/weekly to keep documentation fresh
-4. Pin the notebook for easy access
-
-### Best Practices
-1. Create README notebooks for each major schema
-2. Schedule regular updates to maintain freshness
-3. Use as part of data governance documentation
-4. Reference in onboarding materials for new team members
-
-## Integration Ideas
-
-### 1. Data Governance
-- Link to governance policies
-- Track schema changes over time
-- Document data ownership and stewardship
-
-### 2. Data Quality Monitoring
-- Set up alerts for unexpected changes
-- Monitor data completeness trends
-- Track cardinality changes
-
-### 3. Development Workflows
-- Include in CI/CD pipelines
-- Automate documentation updates
-- Track schema evolution
-
-## Technical Notes
-
-### Performance Considerations
-- Uses efficient Spark SQL commands
-- Lazy evaluation for statistics
-- Handles large schemas gracefully
-- Excludes system tables for efficiency
-
-### Security Features
-- Respects Databricks security model
-- Shows only accessible tables
-- Handles permission errors gracefully
-
-## Future Enhancement Possibilities
-
-1. **Additional Statistics**
-   - Column correlations
-   - Data distribution visualizations
-   - Pattern matching for string columns
-
-2. **Integration Features**
-   - Links to sample queries
-   - Usage statistics integration
-   - Data lineage visualization
-
-3. **Documentation Enhancements**
-   - Custom metadata support
-   - Business glossary integration
-   - Change tracking visualization
