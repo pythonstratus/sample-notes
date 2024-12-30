@@ -44,14 +44,18 @@ def generate_schema_readme(schema_name="bk_MPO", database="staging"):
         stats = {}
         if numeric_cols:
             # Create list of expressions for statistics
-            stat_expressions = []
-            for col in numeric_cols:
-                stat_expressions.extend([
-                    F.min(col).alias(f"{col}_min"),
-                    F.max(col).alias(f"{col}_max"),
-                    F.avg(col).alias(f"{col}_avg")
-                ])
-            stats_df = df.select(stat_expressions)
+            try:
+                stat_expressions = []
+                for col in numeric_cols:
+                    stat_expressions.extend([
+                        F.min(col).alias(f"{col}_min"),
+                        F.max(col).alias(f"{col}_max"),
+                        F.avg(col).alias(f"{col}_avg")
+                    ])
+                stats_df = df.select(stat_expressions) if stat_expressions else spark.createDataFrame([(None,)], ["dummy"])
+            except Exception as e:
+                print(f"Warning: Error calculating statistics: {str(e)}")
+                stats_df = spark.createDataFrame([(None,)], ["dummy"])
             stats = stats_df.first().asDict()
         
         return {
@@ -107,10 +111,20 @@ def generate_schema_readme(schema_name="bk_MPO", database="staging"):
             # Get statistics if available
             col_stats = ""
             if f"{col_name}_min" in stats['column_stats']:
-                min_val = stats['column_stats'][f"{col_name}_min"]
-                max_val = stats['column_stats'][f"{col_name}_max"]
-                avg_val = stats['column_stats'][f"{col_name}_avg"]
-                col_stats = f"Min: {min_val:.2f}, Max: {max_val:.2f}, Avg: {avg_val:.2f}"
+                min_val = stats['column_stats'].get(f"{col_name}_min")
+                max_val = stats['column_stats'].get(f"{col_name}_max")
+                avg_val = stats['column_stats'].get(f"{col_name}_avg")
+                
+                # Format only if values are not None
+                stats_parts = []
+                if min_val is not None:
+                    stats_parts.append(f"Min: {min_val:.2f}")
+                if max_val is not None:
+                    stats_parts.append(f"Max: {max_val:.2f}")
+                if avg_val is not None:
+                    stats_parts.append(f"Avg: {avg_val:.2f}")
+                    
+                col_stats = ", ".join(stats_parts) if stats_parts else "No statistics available"
             
             html_output += f"""
                     <tr>
