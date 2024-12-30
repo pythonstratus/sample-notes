@@ -12,20 +12,18 @@ def generate_schema_readme(schema_name="bk_MPO", database="staging"):
     def get_table_info():
         """Get information about all tables in the schema"""
         try:
-            # First check if the database exists
-            databases = [db.name for db in spark.catalog.listDatabases()]
-            if database not in databases:
-                raise Exception(f"Database '{database}' not found. Available databases: {', '.join(databases)}")
-            
-            # Then check for tables under the schema
+            # Check for tables under the schema
             tables = spark.sql(f"SHOW TABLES IN {database}.{schema_name}")
-            if tables.isEmpty():
+            
+            # Return empty list if no tables found
+            if tables.count() == 0:
+                print(f"No tables found in {database}.{schema_name}")
                 return []
             
             # Convert to list of tuples (name, description)
             return [(row.tableName, "") for row in tables.collect()]
         except Exception as e:
-            print(f"Error accessing schema: {str(e)}")
+            print(f"Error accessing schema {database}.{schema_name}: {str(e)}")
             return []
     
     def get_column_statistics(df, col_name, data_type):
@@ -100,6 +98,8 @@ def generate_schema_readme(schema_name="bk_MPO", database="staging"):
                 raise Exception(f"Table {full_table_name} does not exist")
             
             df = spark.table(full_table_name)
+        except Exception as e:
+            raise Exception(f"Error accessing table {full_table_name}: {str(e)}")
         
         # Get basic table info
         row_count = df.count()
