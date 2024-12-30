@@ -1,10 +1,9 @@
 from pyspark.sql import SparkSession
 from datetime import datetime
-import pandas as pd
-from IPython.display import display, HTML, Markdown
-import json
+from IPython.display import display, HTML
+import pyspark.sql.functions as F
 
-def generate_schema_readme(schema_name="bk_MPO"):
+def generate_schema_readme(schema_name="bk_MPO", database="staging"):
     """
     Generate a comprehensive README dashboard for a Databricks schema
     """
@@ -12,17 +11,13 @@ def generate_schema_readme(schema_name="bk_MPO"):
     
     def get_table_info():
         """Get information about all tables in the schema"""
-        query = f"""
-        SELECT table_name, 
-               creation_time,
-               last_modified_time
-        FROM {schema_name}.INFORMATION_SCHEMA.TABLES
-        """
-        return spark.sql(query).toPandas()
+        # Get list of tables using spark catalog
+        tables = spark.catalog.listTables(f"{database}.{schema_name}")
+        return [(table.name, table.description) for table in tables]
     
     def get_table_stats(table_name):
         """Get detailed statistics for a specific table"""
-        full_table_name = f"{schema_name}.{table_name}"
+        full_table_name = f"{database}.{schema_name}.{table_name}"
         df = spark.table(full_table_name)
         
         # Get row count
@@ -32,21 +27,39 @@ def generate_schema_readme(schema_name="bk_MPO"):
         columns = df.columns
         col_count = len(columns)
         
-        # Get sample data types
+        # Get data types
         dtypes = {col: str(df.schema[col].dataType) for col in columns}
         
-        # Get last updated timestamp using a sample row
-        last_updated = df.agg({"*": "max"}).collect()[0][0]
+        # Get last modified time using spark.sql DESCRIBE HISTORY
+        history_df = spark.sql(f"DESCRIBE HISTORY {full_table_name}")
+        if history_df.count() > 0:
+            last_modified = history_df.select('timestamp').first()[0]
+        else:
+            last_modified = "No history available"
+            
+        # Get basic column statistics
+        numeric_cols = [col for col, dtype in dtypes.items() 
+                       if 'int' in dtype.lower() or 'double' in dtype.lower() or 'decimal' in dtype.lower()]
+        
+        stats = {}
+        if numeric_cols:
+            stats_df = df.select([
+                F.min(col).alias(f"{col}_min"),
+                F.max(col).alias(f"{col}_max"),
+                F.avg(col).alias(f"{col}_avg")
+            for col in numeric_cols])
+            stats = stats_df.first().asDict()
         
         return {
             "row_count": row_count,
             "column_count": col_count,
             "columns": dtypes,
-            "last_updated": last_updated
+            "last_modified": last_modified,
+            "column_stats": stats
         }
     
     # Get all tables
-    tables_df = get_table_info()
+    tables = get_table_info()
     
     # Generate HTML output
     html_output = f"""
@@ -56,16 +69,16 @@ def generate_schema_readme(schema_name="bk_MPO"):
         
         <h2>Schema Overview</h2>
         <ul>
-            <li>Total Tables: {len(tables_df)}</li>
-            <li>Last Schema Update: {tables_df['last_modified_time'].max()}</li>
+            <li>Total Tables: {len(tables)}</li>
+            <li>Database: {database}</li>
+            <li>Schema: {schema_name}</li>
         </ul>
         
         <h2>Table Details</h2>
     """
     
     # Generate detailed table information
-    for _, row in tables_df.iterrows():
-        table_name = row['table_name']
+    for table_name, description in tables:
         stats = get_table_stats(table_name)
         
         html_output += f"""
@@ -74,23 +87,32 @@ def generate_schema_readme(schema_name="bk_MPO"):
                 <strong>{table_name}</strong> - {stats['row_count']:,} rows, {stats['column_count']} columns
             </summary>
             <div style="padding: 10px; margin-left: 20px;">
-                <p>Created: {row['creation_time']}</p>
-                <p>Last Modified: {row['last_modified_time']}</p>
-                <p>Last Data Update: {stats['last_updated']}</p>
+                <p>Description: {description if description else 'No description available'}</p>
+                <p>Last Modified: {stats['last_modified']}</p>
                 
                 <h4>Columns:</h4>
                 <table style="width: 100%; border-collapse: collapse;">
                     <tr>
                         <th style="text-align: left; padding: 5px; border: 1px solid #ddd;">Column Name</th>
                         <th style="text-align: left; padding: 5px; border: 1px solid #ddd;">Data Type</th>
+                        <th style="text-align: left; padding: 5px; border: 1px solid #ddd;">Basic Statistics</th>
                     </tr>
         """
         
         for col_name, dtype in stats['columns'].items():
+            # Get statistics if available
+            col_stats = ""
+            if f"{col_name}_min" in stats['column_stats']:
+                min_val = stats['column_stats'][f"{col_name}_min"]
+                max_val = stats['column_stats'][f"{col_name}_max"]
+                avg_val = stats['column_stats'][f"{col_name}_avg"]
+                col_stats = f"Min: {min_val:.2f}, Max: {max_val:.2f}, Avg: {avg_val:.2f}"
+            
             html_output += f"""
                     <tr>
                         <td style="padding: 5px; border: 1px solid #ddd;">{col_name}</td>
                         <td style="padding: 5px; border: 1px solid #ddd;">{dtype}</td>
+                        <td style="padding: 5px; border: 1px solid #ddd;">{col_stats}</td>
                     </tr>
             """
             
@@ -106,7 +128,4 @@ def generate_schema_readme(schema_name="bk_MPO"):
     display(HTML(html_output))
 
 # Example usage
-generate_schema_readme("bk_MPO")
-
-# Optional: Save the documentation to a notebook-level variable for persistence
-dbutils.notebook.exit({"last_generated": datetime.now().isoformat()})
+# generate_schema_readme("bk_MPO", "staging")
