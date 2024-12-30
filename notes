@@ -11,65 +11,128 @@ def generate_schema_readme(schema_name="bk_MPO", database="staging"):
     
     def get_table_info():
         """Get information about all tables in the schema"""
-        # Get list of tables using spark catalog
-        tables = spark.catalog.listTables(f"{database}.{schema_name}")
-        return [(table.name, table.description) for table in tables]
+        try:
+            # First check if the database exists
+            databases = [db.name for db in spark.catalog.listDatabases()]
+            if database not in databases:
+                raise Exception(f"Database '{database}' not found. Available databases: {', '.join(databases)}")
+            
+            # Then check for tables under the schema
+            tables = spark.sql(f"SHOW TABLES IN {database}.{schema_name}")
+            if tables.isEmpty():
+                return []
+            
+            # Convert to list of tuples (name, description)
+            return [(row.tableName, "") for row in tables.collect()]
+        except Exception as e:
+            print(f"Error accessing schema: {str(e)}")
+            return []
+    
+    def get_column_statistics(df, col_name, data_type):
+        """Get relevant statistics based on column data type"""
+        try:
+            stats = {}
+            
+            # For numeric columns
+            if any(t in data_type.lower() for t in ['int', 'double', 'decimal', 'float']):
+                stats_df = df.agg(
+                    F.count(col_name).alias('count'),
+                    F.count(F.when(F.col(col_name).isNull(), True)).alias('null_count'),
+                    F.min(col_name).alias('min'),
+                    F.max(col_name).alias('max')
+                ).collect()[0]
+                
+                total_count = stats_df['count']
+                null_count = stats_df['null_count']
+                
+                stats['completeness'] = f"{((total_count - null_count) / total_count * 100):.1f}% populated"
+                if null_count > 0:
+                    stats['nulls'] = f"{null_count:,} nulls"
+                stats['range'] = f"Range: {stats_df['min']} to {stats_df['max']}"
+                
+            # For string columns
+            elif 'string' in data_type.lower():
+                stats_df = df.agg(
+                    F.count(col_name).alias('count'),
+                    F.count(F.when(F.col(col_name).isNull(), True)).alias('null_count'),
+                    F.countDistinct(col_name).alias('distinct_count')
+                ).collect()[0]
+                
+                total_count = stats_df['count']
+                null_count = stats_df['null_count']
+                distinct_count = stats_df['distinct_count']
+                
+                stats['completeness'] = f"{((total_count - null_count) / total_count * 100):.1f}% populated"
+                if null_count > 0:
+                    stats['nulls'] = f"{null_count:,} nulls"
+                stats['cardinality'] = f"{distinct_count:,} unique values"
+                
+            # For timestamp/date columns
+            elif any(t in data_type.lower() for t in ['timestamp', 'date']):
+                stats_df = df.agg(
+                    F.count(col_name).alias('count'),
+                    F.count(F.when(F.col(col_name).isNull(), True)).alias('null_count'),
+                    F.min(col_name).alias('min_date'),
+                    F.max(col_name).alias('max_date')
+                ).collect()[0]
+                
+                total_count = stats_df['count']
+                null_count = stats_df['null_count']
+                
+                stats['completeness'] = f"{((total_count - null_count) / total_count * 100):.1f}% populated"
+                if null_count > 0:
+                    stats['nulls'] = f"{null_count:,} nulls"
+                stats['timespan'] = f"From {stats_df['min_date']} to {stats_df['max_date']}"
+            
+            return " | ".join(stats.values())
+            
+        except Exception as e:
+            return f"Error calculating statistics: {str(e)}"
     
     def get_table_stats(table_name):
         """Get detailed statistics for a specific table"""
         full_table_name = f"{database}.{schema_name}.{table_name}"
-        df = spark.table(full_table_name)
         
-        # Get row count
+        # Verify table exists before attempting to get statistics
+        try:
+            table_exists = spark.sql(f"SHOW TABLES IN {database}.{schema_name} LIKE '{table_name}'").count() > 0
+            if not table_exists:
+                raise Exception(f"Table {full_table_name} does not exist")
+            
+            df = spark.table(full_table_name)
+        
+        # Get basic table info
         row_count = df.count()
-        
-        # Get column information
         columns = df.columns
         col_count = len(columns)
         
-        # Get data types
-        dtypes = {col: str(df.schema[col].dataType) for col in columns}
+        # Get data types and statistics
+        schema_info = {}
+        for field in df.schema:
+            col_name = field.name
+            data_type = str(field.dataType)
+            statistics = get_column_statistics(df, col_name, data_type)
+            schema_info[col_name] = {
+                'data_type': data_type,
+                'statistics': statistics
+            }
         
-        # Get last modified time using spark.sql DESCRIBE HISTORY
-        history_df = spark.sql(f"DESCRIBE HISTORY {full_table_name}")
-        if history_df.count() > 0:
-            last_modified = history_df.select('timestamp').first()[0]
-        else:
-            last_modified = "No history available"
+        # Get last modified time
+        try:
+            history_df = spark.sql(f"DESCRIBE HISTORY {full_table_name}")
+            last_modified = history_df.select('timestamp').first()[0] if history_df.count() > 0 else "No history available"
+        except Exception:
+            last_modified = "History not available"
             
-        # Get basic column statistics
-        numeric_cols = [col for col, dtype in dtypes.items() 
-                       if 'int' in dtype.lower() or 'double' in dtype.lower() or 'decimal' in dtype.lower()]
-        
-        stats = {}
-        if numeric_cols:
-            # Create list of expressions for statistics
-            try:
-                stat_expressions = []
-                for col in numeric_cols:
-                    stat_expressions.extend([
-                        F.min(col).alias(f"{col}_min"),
-                        F.max(col).alias(f"{col}_max"),
-                        F.avg(col).alias(f"{col}_avg")
-                    ])
-                stats_df = df.select(stat_expressions) if stat_expressions else spark.createDataFrame([(None,)], ["dummy"])
-            except Exception as e:
-                print(f"Warning: Error calculating statistics: {str(e)}")
-                stats_df = spark.createDataFrame([(None,)], ["dummy"])
-            stats = stats_df.first().asDict()
-        
         return {
             "row_count": row_count,
             "column_count": col_count,
-            "columns": dtypes,
-            "last_modified": last_modified,
-            "column_stats": stats
+            "columns": schema_info,
+            "last_modified": last_modified
         }
     
-    # Get all tables
-    tables = get_table_info()
-    
     # Generate HTML output
+    tables = get_table_info()
     html_output = f"""
     <div style="padding: 20px;">
         <h1>{schema_name} Schema Documentation</h1>
@@ -87,62 +150,54 @@ def generate_schema_readme(schema_name="bk_MPO", database="staging"):
     
     # Generate detailed table information
     for table_name, description in tables:
-        stats = get_table_stats(table_name)
-        
-        html_output += f"""
-        <details>
-            <summary style="cursor: pointer; padding: 10px; background-color: #f0f0f0; margin: 5px 0;">
-                <strong>{table_name}</strong> - {stats['row_count']:,} rows, {stats['column_count']} columns
-            </summary>
-            <div style="padding: 10px; margin-left: 20px;">
-                <p>Description: {description if description else 'No description available'}</p>
-                <p>Last Modified: {stats['last_modified']}</p>
-                
-                <h4>Columns:</h4>
-                <table style="width: 100%; border-collapse: collapse;">
-                    <tr>
-                        <th style="text-align: left; padding: 5px; border: 1px solid #ddd;">Column Name</th>
-                        <th style="text-align: left; padding: 5px; border: 1px solid #ddd;">Data Type</th>
-                        <th style="text-align: left; padding: 5px; border: 1px solid #ddd;">Basic Statistics</th>
-                    </tr>
-        """
-        
-        for col_name, dtype in stats['columns'].items():
-            # Get statistics if available
-            col_stats = ""
-            if f"{col_name}_min" in stats['column_stats']:
-                min_val = stats['column_stats'].get(f"{col_name}_min")
-                max_val = stats['column_stats'].get(f"{col_name}_max")
-                avg_val = stats['column_stats'].get(f"{col_name}_avg")
-                
-                # Format only if values are not None
-                stats_parts = []
-                if min_val is not None:
-                    stats_parts.append(f"Min: {min_val:.2f}")
-                if max_val is not None:
-                    stats_parts.append(f"Max: {max_val:.2f}")
-                if avg_val is not None:
-                    stats_parts.append(f"Avg: {avg_val:.2f}")
-                    
-                col_stats = ", ".join(stats_parts) if stats_parts else "No statistics available"
+        try:
+            stats = get_table_stats(table_name)
             
             html_output += f"""
-                    <tr>
-                        <td style="padding: 5px; border: 1px solid #ddd;">{col_name}</td>
-                        <td style="padding: 5px; border: 1px solid #ddd;">{dtype}</td>
-                        <td style="padding: 5px; border: 1px solid #ddd;">{col_stats}</td>
-                    </tr>
+            <details>
+                <summary style="cursor: pointer; padding: 10px; background-color: #f0f0f0; margin: 5px 0;">
+                    <strong>{table_name}</strong> - {stats['row_count']:,} rows, {stats['column_count']} columns
+                </summary>
+                <div style="padding: 10px; margin-left: 20px;">
+                    <p>Description: {description if description else 'No description available'}</p>
+                    <p>Last Modified: {stats['last_modified']}</p>
+                    
+                    <h4>Columns:</h4>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <th style="text-align: left; padding: 5px; border: 1px solid #ddd;">Column Name</th>
+                            <th style="text-align: left; padding: 5px; border: 1px solid #ddd;">Data Type</th>
+                            <th style="text-align: left; padding: 5px; border: 1px solid #ddd;">Statistics</th>
+                        </tr>
             """
             
-        html_output += """
-                </table>
-            </div>
-        </details>
-        """
+            for col_name, info in stats['columns'].items():
+                html_output += f"""
+                        <tr>
+                            <td style="padding: 5px; border: 1px solid #ddd;">{col_name}</td>
+                            <td style="padding: 5px; border: 1px solid #ddd;">{info['data_type']}</td>
+                            <td style="padding: 5px; border: 1px solid #ddd;">{info['statistics']}</td>
+                        </tr>
+                """
+                
+            html_output += """
+                    </table>
+                </div>
+            </details>
+            """
+        except Exception as e:
+            html_output += f"""
+            <details>
+                <summary style="cursor: pointer; padding: 10px; background-color: #ffebee; margin: 5px 0;">
+                    <strong>{table_name}</strong> - Error loading table details
+                </summary>
+                <div style="padding: 10px; margin-left: 20px;">
+                    <p>Error: {str(e)}</p>
+                </div>
+            </details>
+            """
     
     html_output += "</div>"
-    
-    # Display the dashboard
     display(HTML(html_output))
 
 # Example usage
