@@ -43,11 +43,15 @@ def generate_schema_readme(schema_name="bk_MPO", database="staging"):
         
         stats = {}
         if numeric_cols:
-            stats_df = df.select([
-                F.min(col).alias(f"{col}_min"),
-                F.max(col).alias(f"{col}_max"),
-                F.avg(col).alias(f"{col}_avg")
-            for col in numeric_cols])
+            # Create list of expressions for statistics
+            stat_expressions = []
+            for col in numeric_cols:
+                stat_expressions.extend([
+                    F.min(col).alias(f"{col}_min"),
+                    F.max(col).alias(f"{col}_max"),
+                    F.avg(col).alias(f"{col}_avg")
+                ])
+            stats_df = df.select(stat_expressions)
             stats = stats_df.first().asDict()
         
         return {
