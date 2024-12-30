@@ -10,7 +10,7 @@ def generate_schema_readme(schema_name="bk_MPO", database="staging"):
     spark = SparkSession.builder.getOrCreate()
     
     def get_table_info():
-        """Get information about all tables in the schema"""
+        """Get information about all tables in the schema, excluding system tables"""
         try:
             # Check for tables under the schema
             tables = spark.sql(f"SHOW TABLES IN {database}.{schema_name}")
@@ -20,8 +20,8 @@ def generate_schema_readme(schema_name="bk_MPO", database="staging"):
                 print(f"No tables found in {database}.{schema_name}")
                 return []
             
-            # Convert to list of tuples (name, description)
-            return [(row.tableName, "") for row in tables.collect()]
+            # Convert to list of tuples (name, description), excluding system tables (starting with _)
+            return [(row.tableName, "") for row in tables.collect() if not row.tableName.startswith('_')]
         except Exception as e:
             print(f"Error accessing schema {database}.{schema_name}: {str(e)}")
             return []
