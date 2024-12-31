@@ -31,56 +31,60 @@ def generate_schema_readme(schema_name="bk_MPO", database="staging"):
         try:
             stats = {}
             
+            # Get basic counts first
+            stats_df = df.agg(
+                F.count(col_name).alias('count'),
+                F.count(F.when(F.col(col_name).isNull(), True)).alias('null_count')
+            ).collect()[0]
+            
+            total_count = stats_df['count']
+            null_count = stats_df['null_count']
+            
+            # Handle empty columns
+            if total_count == 0:
+                return "No data available"
+            
+            # Calculate completeness
+            completeness = ((total_count - null_count) / total_count * 100) if total_count > 0 else 0
+            stats['completeness'] = f"{completeness:.1f}% populated"
+            
+            if null_count > 0:
+                stats['nulls'] = f"{null_count:,} nulls"
+                
             # For numeric columns
             if any(t in data_type.lower() for t in ['int', 'double', 'decimal', 'float']):
-                stats_df = df.agg(
-                    F.count(col_name).alias('count'),
-                    F.count(F.when(F.col(col_name).isNull(), True)).alias('null_count'),
-                    F.min(col_name).alias('min'),
-                    F.max(col_name).alias('max')
-                ).collect()[0]
-                
-                total_count = stats_df['count']
-                null_count = stats_df['null_count']
-                
-                stats['completeness'] = f"{((total_count - null_count) / total_count * 100):.1f}% populated"
-                if null_count > 0:
-                    stats['nulls'] = f"{null_count:,} nulls"
-                stats['range'] = f"Range: {stats_df['min']} to {stats_df['max']}"
+                try:
+                    range_stats = df.agg(
+                        F.min(col_name).alias('min'),
+                        F.max(col_name).alias('max')
+                    ).collect()[0]
+                    
+                    if range_stats['min'] is not None and range_stats['max'] is not None:
+                        stats['range'] = f"Range: {range_stats['min']} to {range_stats['max']}"
+                except Exception:
+                    stats['range'] = "Unable to calculate range"
                 
             # For string columns
             elif 'string' in data_type.lower():
-                stats_df = df.agg(
-                    F.count(col_name).alias('count'),
-                    F.count(F.when(F.col(col_name).isNull(), True)).alias('null_count'),
-                    F.countDistinct(col_name).alias('distinct_count')
-                ).collect()[0]
-                
-                total_count = stats_df['count']
-                null_count = stats_df['null_count']
-                distinct_count = stats_df['distinct_count']
-                
-                stats['completeness'] = f"{((total_count - null_count) / total_count * 100):.1f}% populated"
-                if null_count > 0:
-                    stats['nulls'] = f"{null_count:,} nulls"
-                stats['cardinality'] = f"{distinct_count:,} unique values"
+                try:
+                    distinct_count = df.agg(F.countDistinct(col_name)).collect()[0][0]
+                    if distinct_count is not None:
+                        stats['cardinality'] = f"{distinct_count:,} unique values"
+                except Exception:
+                    stats['cardinality'] = "Unable to calculate unique values"
                 
             # For timestamp/date columns
             elif any(t in data_type.lower() for t in ['timestamp', 'date']):
-                stats_df = df.agg(
-                    F.count(col_name).alias('count'),
-                    F.count(F.when(F.col(col_name).isNull(), True)).alias('null_count'),
-                    F.min(col_name).alias('min_date'),
-                    F.max(col_name).alias('max_date')
-                ).collect()[0]
-                
-                total_count = stats_df['count']
-                null_count = stats_df['null_count']
-                
-                stats['completeness'] = f"{((total_count - null_count) / total_count * 100):.1f}% populated"
-                if null_count > 0:
-                    stats['nulls'] = f"{null_count:,} nulls"
-                stats['timespan'] = f"From {stats_df['min_date']} to {stats_df['max_date']}"
+                try:
+                    time_stats = df.agg(
+                        F.min(col_name).alias('min_date'),
+                        F.max(col_name).alias('max_date')
+                    ).collect()[0]
+                    
+                    if time_stats['min_date'] is not None and time_stats['max_date'] is not None:
+                        stats['timespan'] = f"From {time_stats['min_date']} to {time_stats['max_date']}"
+                except Exception:
+                    stats['timespan'] = "Unable to calculate time range"
             
             return " | ".join(stats.values())
             
