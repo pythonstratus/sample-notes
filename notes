@@ -1,63 +1,30 @@
-# Databricks notebook source
-
-# COMMAND ----------
-# MAGIC %md
-# MAGIC # 1. Database Overview
-
-# COMMAND ----------
-# MAGIC %md
-# MAGIC ## Purpose and Scope of Each Database
-
-# COMMAND ----------
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import *
-from pyspark.sql.types import *
-
-def get_database_metadata():
-    """
-    Retrieve and display metadata about all databases in the environment
-    """
-    databases_df = spark.sql("SHOW DATABASES")
-    return databases_df
-
-# List all databases
-databases = get_database_metadata()
-display(databases)
-
-# COMMAND ----------
-def get_table_metadata(database_name):
-    """
-    Get metadata for all tables in specified database
-    
-    Args:
-        database_name (str): Name of database to analyze
-    """
-    tables_df = spark.sql(f"SHOW TABLES IN {database_name}")
-    return tables_df
-
-# Example usage for a specific database
-# display(get_table_metadata("your_database_name"))
-
-# COMMAND ----------
-# MAGIC %md
-# MAGIC ## Environment Details
-
 # COMMAND ----------
 def get_spark_config():
     """
-    Display current Spark configuration and environment details
+    Display current Spark configuration and environment details safely
     """
-    # Get Spark version
-    spark_version = spark.version
-    
-    # Get current configuration
-    conf = spark.sparkContext.getConf()
-    conf_dict = {key: conf.get(key) for key in conf.getAll()}
-    
-    return {
-        "spark_version": spark_version,
-        "configuration": conf_dict
-    }
+    try:
+        # Get Spark version safely
+        spark_version = spark.version
+        
+        # Get configuration details safely
+        conf_dict = {}
+        
+        # Use SQL to get some basic configuration info
+        runtime_config = spark.sql("SET -v").collect()
+        for row in runtime_config:
+            conf_dict[row['key']] = row['value']
+            
+        return {
+            "spark_version": spark_version,
+            "configuration": conf_dict
+        }
+    except Exception as e:
+        print(f"Error getting configuration: {str(e)}")
+        return {
+            "spark_version": "Unable to retrieve",
+            "configuration": {}
+        }
 
 # Display Spark configuration
 spark_config = get_spark_config()
@@ -66,50 +33,6 @@ print("\nSpark Configuration:")
 for key, value in spark_config['configuration'].items():
     print(f"{key}: {value}")
 
-# COMMAND ----------
-# MAGIC %md
-# MAGIC ## Access Requirements
-
-# COMMAND ----------
-def analyze_table_permissions(database_name, table_name):
-    """
-    Analyze permissions for specified table
-    
-    Args:
-        database_name (str): Database name
-        table_name (str): Table name
-    """
-    permissions_df = spark.sql(f"SHOW GRANT ON TABLE {database_name}.{table_name}")
-    return permissions_df
-
-def get_current_user():
-    """
-    Get current user context
-    """
-    return spark.sql("SELECT current_user()").collect()[0][0]
-
-# Display current user
-print(f"Current User: {get_current_user()}")
-
-# Example usage for checking table permissions
-# display(analyze_table_permissions("your_database", "your_table"))
-
-# COMMAND ----------
-def generate_database_report():
-    """
-    Generate a comprehensive report of database environment
-    """
-    report = {
-        "databases": get_database_metadata().collect(),
-        "current_user": get_current_user(),
-        "environment": get_spark_config()
-    }
-    return report
-
-# Generate and display full report
-full_report = generate_database_report()
-print("Database Environment Report")
-print("========================")
-print(f"\nTotal Databases: {len(full_report['databases'])}")
-print(f"Current User Context: {full_report['current_user']}")
-print(f"Spark Version: {full_report['environment']['spark_version']}")
+# Alternative simpler approach if you just need version info
+print("\nBasic Spark Information:")
+print(spark.sparkContext.version)  # Get Spark version directly
