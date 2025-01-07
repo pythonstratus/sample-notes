@@ -1,242 +1,115 @@
+# Databricks notebook source
+
+# COMMAND ----------
+# MAGIC %md
+# MAGIC # 1. Database Overview
+
+# COMMAND ----------
+# MAGIC %md
+# MAGIC ## Purpose and Scope of Each Database
+
+# COMMAND ----------
 from pyspark.sql import SparkSession
-from datetime import datetime
-from IPython.display import display, HTML
-import pyspark.sql.functions as F
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
 
-def generate_schema_readme(schema_name="bk_MPO", database="staging"):
+def get_database_metadata():
     """
-    Generate a comprehensive README dashboard for a Databricks schema
+    Retrieve and display metadata about all databases in the environment
     """
-    spark = SparkSession.builder.getOrCreate()
-    
-    def get_table_info():
-        """Get information about all tables in the schema, excluding system tables"""
-        try:
-            # Check for tables under the schema
-            tables = spark.sql(f"SHOW TABLES IN {database}.{schema_name}")
-            
-            # Return empty list if no tables found
-            if tables.count() == 0:
-                print(f"No tables found in {database}.{schema_name}")
-                return []
-            
-            # Convert to list of tuples (name, description), excluding system tables (starting with _)
-            return [(row.tableName, "") for row in tables.collect() if not row.tableName.startswith('_')]
-        except Exception as e:
-            print(f"Error accessing schema {database}.{schema_name}: {str(e)}")
-            return []
-    
-    def get_column_statistics(df, col_name, data_type):
-        """Get relevant statistics based on column data type"""
-        try:
-            stats = {}
-            
-            # Get basic counts first
-            stats_df = df.agg(
-                F.count(col_name).alias('count'),
-                F.count(F.when(F.col(col_name).isNull(), True)).alias('null_count')
-            ).collect()[0]
-            
-            total_count = stats_df['count']
-            null_count = stats_df['null_count']
-            
-            # Handle empty columns
-            if total_count == 0:
-                return "No data available"
-            
-            # Calculate completeness
-            completeness = ((total_count - null_count) / total_count * 100) if total_count > 0 else 0
-            stats['completeness'] = f"{completeness:.1f}% populated"
-            
-            if null_count > 0:
-                stats['nulls'] = f"{null_count:,} nulls"
-                
-            # For numeric columns
-            if any(t in data_type.lower() for t in ['int', 'double', 'decimal', 'float']):
-                try:
-                    range_stats = df.agg(
-                        F.min(col_name).alias('min'),
-                        F.max(col_name).alias('max')
-                    ).collect()[0]
-                    
-                    if range_stats['min'] is not None and range_stats['max'] is not None:
-                        stats['range'] = f"Range: {range_stats['min']} to {range_stats['max']}"
-                except Exception:
-                    stats['range'] = "Unable to calculate range"
-                
-            # For string columns
-            elif 'string' in data_type.lower():
-                try:
-                    distinct_count = df.agg(F.countDistinct(col_name)).collect()[0][0]
-                    if distinct_count is not None:
-                        stats['cardinality'] = f"{distinct_count:,} unique values"
-                except Exception:
-                    stats['cardinality'] = "Unable to calculate unique values"
-                
-            # For timestamp/date columns
-            elif any(t in data_type.lower() for t in ['timestamp', 'date']):
-                try:
-                    time_stats = df.agg(
-                        F.min(col_name).alias('min_date'),
-                        F.max(col_name).alias('max_date')
-                    ).collect()[0]
-                    
-                    if time_stats['min_date'] is not None and time_stats['max_date'] is not None:
-                        stats['timespan'] = f"From {time_stats['min_date']} to {time_stats['max_date']}"
-                except Exception:
-                    stats['timespan'] = "Unable to calculate time range"
-            
-            return " | ".join(stats.values())
-            
-        except Exception as e:
-            return f"Error calculating statistics: {str(e)}"
-    
-    def get_table_stats(table_name):
-        """Get detailed statistics for a specific table"""
-        full_table_name = f"{database}.{schema_name}.{table_name}"
-        
-        # Verify table exists before attempting to get statistics
-        try:
-            table_exists = spark.sql(f"SHOW TABLES IN {database}.{schema_name} LIKE '{table_name}'").count() > 0
-            if not table_exists:
-                raise Exception(f"Table {full_table_name} does not exist")
-            
-            df = spark.table(full_table_name)
-        except Exception as e:
-            raise Exception(f"Error accessing table {full_table_name}: {str(e)}")
-        
-        # Get basic table info
-        row_count = df.count()
-        columns = df.columns
-        col_count = len(columns)
-        
-        # Get data types and statistics
-        schema_info = {}
-        for field in df.schema:
-            col_name = field.name
-            data_type = str(field.dataType)
-            statistics = get_column_statistics(df, col_name, data_type)
-            schema_info[col_name] = {
-                'data_type': data_type,
-                'statistics': statistics
-            }
-        
-        # Get last modified time
-        try:
-            history_df = spark.sql(f"DESCRIBE HISTORY {full_table_name}")
-            last_modified = history_df.select('timestamp').first()[0] if history_df.count() > 0 else "No history available"
-        except Exception:
-            last_modified = "History not available"
-            
-        return {
-            "row_count": row_count,
-            "column_count": col_count,
-            "columns": schema_info,
-            "last_modified": last_modified
-        }
-    
-    # Generate HTML output
-    tables = get_table_info()
-    html_output = f"""
-    <div style="padding: 20px; max-width: 100%; width: 100%;">
-        <style>
-            .schema-table {{
-                width: 100%;
-                border-collapse: collapse;
-                table-layout: fixed;
-            }}
-            .schema-table th, .schema-table td {{
-                padding: 8px;
-                border: 1px solid #ddd;
-                overflow: auto;
-                word-wrap: break-word;
-            }}
-            .schema-table th {{
-                background-color: #f5f5f5;
-                font-weight: bold;
-            }}
-            .column-name {{
-                width: 20%;
-            }}
-            .data-type {{
-                width: 20%;
-            }}
-            .statistics {{
-                width: 60%;
-            }}
-            details {{
-                margin-bottom: 10px;
-                width: 100%;
-            }}
-            details > div {{
-                margin: 10px 0;
-                width: 100%;
-            }}
-        </style>
-        <h1>{schema_name} Schema Documentation</h1>
-        <p>Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-        
-        <h2>Schema Overview</h2>
-        <ul style="margin-bottom: 20px;">
-            <li>Total Tables: {len(tables)}</li>
-            <li>Database: {database}</li>
-            <li>Schema: {schema_name}</li>
-        </ul>
-        
-        <h2>Table Details</h2>
-    """
-    
-    # Generate detailed table information
-    for table_name, description in tables:
-        try:
-            stats = get_table_stats(table_name)
-            
-            html_output += f"""
-            <details>
-                <summary style="cursor: pointer; padding: 10px; background-color: #f0f0f0; margin: 5px 0; width: 100%; display: block;">
-                    <strong>{table_name}</strong> - {stats['row_count']:,} rows, {stats['column_count']} columns
-                </summary>
-                <div style="padding: 10px; width: 100%;">
-                    <p>Description: {description if description else 'No description available'}</p>
-                    <p>Last Modified: {stats['last_modified']}</p>
-                    
-                    <h4>Columns:</h4>
-                    <table class="schema-table">
-                        <tr>
-                            <th class="column-name">Column Name</th>
-                            <th class="data-type">Data Type</th>
-                            <th class="statistics">Statistics</th>
-                        </tr>
-            """
-            
-            for col_name, info in stats['columns'].items():
-                html_output += f"""
-                        <tr>
-                            <td style="padding: 5px; border: 1px solid #ddd;">{col_name}</td>
-                            <td style="padding: 5px; border: 1px solid #ddd;">{info['data_type']}</td>
-                            <td style="padding: 5px; border: 1px solid #ddd;">{info['statistics']}</td>
-                        </tr>
-                """
-                
-            html_output += """
-                    </table>
-                </div>
-            </details>
-            """
-        except Exception as e:
-            html_output += f"""
-            <details>
-                <summary style="cursor: pointer; padding: 10px; background-color: #ffebee; margin: 5px 0;">
-                    <strong>{table_name}</strong> - Error loading table details
-                </summary>
-                <div style="padding: 10px; margin-left: 20px;">
-                    <p>Error: {str(e)}</p>
-                </div>
-            </details>
-            """
-    
-    html_output += "</div>"
-    display(HTML(html_output))
+    databases_df = spark.sql("SHOW DATABASES")
+    return databases_df
 
-# Example usage
-# generate_schema_readme("bk_MPO", "staging")
+# List all databases
+databases = get_database_metadata()
+display(databases)
+
+# COMMAND ----------
+def get_table_metadata(database_name):
+    """
+    Get metadata for all tables in specified database
+    
+    Args:
+        database_name (str): Name of database to analyze
+    """
+    tables_df = spark.sql(f"SHOW TABLES IN {database_name}")
+    return tables_df
+
+# Example usage for a specific database
+# display(get_table_metadata("your_database_name"))
+
+# COMMAND ----------
+# MAGIC %md
+# MAGIC ## Environment Details
+
+# COMMAND ----------
+def get_spark_config():
+    """
+    Display current Spark configuration and environment details
+    """
+    # Get Spark version
+    spark_version = spark.version
+    
+    # Get current configuration
+    conf = spark.sparkContext.getConf()
+    conf_dict = {key: conf.get(key) for key in conf.getAll()}
+    
+    return {
+        "spark_version": spark_version,
+        "configuration": conf_dict
+    }
+
+# Display Spark configuration
+spark_config = get_spark_config()
+print(f"Apache Spark Version: {spark_config['spark_version']}")
+print("\nSpark Configuration:")
+for key, value in spark_config['configuration'].items():
+    print(f"{key}: {value}")
+
+# COMMAND ----------
+# MAGIC %md
+# MAGIC ## Access Requirements
+
+# COMMAND ----------
+def analyze_table_permissions(database_name, table_name):
+    """
+    Analyze permissions for specified table
+    
+    Args:
+        database_name (str): Database name
+        table_name (str): Table name
+    """
+    permissions_df = spark.sql(f"SHOW GRANT ON TABLE {database_name}.{table_name}")
+    return permissions_df
+
+def get_current_user():
+    """
+    Get current user context
+    """
+    return spark.sql("SELECT current_user()").collect()[0][0]
+
+# Display current user
+print(f"Current User: {get_current_user()}")
+
+# Example usage for checking table permissions
+# display(analyze_table_permissions("your_database", "your_table"))
+
+# COMMAND ----------
+def generate_database_report():
+    """
+    Generate a comprehensive report of database environment
+    """
+    report = {
+        "databases": get_database_metadata().collect(),
+        "current_user": get_current_user(),
+        "environment": get_spark_config()
+    }
+    return report
+
+# Generate and display full report
+full_report = generate_database_report()
+print("Database Environment Report")
+print("========================")
+print(f"\nTotal Databases: {len(full_report['databases'])}")
+print(f"Current User Context: {full_report['current_user']}")
+print(f"Spark Version: {full_report['environment']['spark_version']}")
