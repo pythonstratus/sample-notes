@@ -1,38 +1,82 @@
 # COMMAND ----------
-def get_spark_config():
+def analyze_table_permissions(database_name, table_name):
     """
-    Display current Spark configuration and environment details safely
+    Safely analyze permissions for specified table using SQL commands
+    
+    Args:
+        database_name (str): Database name
+        table_name (str): Table name
     """
     try:
-        # Get Spark version safely
-        spark_version = spark.version
-        
-        # Get configuration details safely
-        conf_dict = {}
-        
-        # Use SQL to get some basic configuration info
-        runtime_config = spark.sql("SET -v").collect()
-        for row in runtime_config:
-            conf_dict[row['key']] = row['value']
-            
-        return {
-            "spark_version": spark_version,
-            "configuration": conf_dict
-        }
+        # Use SQL SHOW GRANTS command instead of direct JVM access
+        permissions_df = spark.sql(f"SHOW GRANTS ON TABLE {database_name}.{table_name}")
+        return permissions_df
     except Exception as e:
-        print(f"Error getting configuration: {str(e)}")
-        return {
-            "spark_version": "Unable to retrieve",
-            "configuration": {}
-        }
+        print(f"Error checking permissions for {database_name}.{table_name}: {str(e)}")
+        return None
 
-# Display Spark configuration
-spark_config = get_spark_config()
-print(f"Apache Spark Version: {spark_config['spark_version']}")
-print("\nSpark Configuration:")
-for key, value in spark_config['configuration'].items():
-    print(f"{key}: {value}")
+def get_current_user():
+    """
+    Get current user context safely using SQL
+    """
+    try:
+        return spark.sql("SELECT current_user()").collect()[0][0]
+    except Exception as e:
+        print(f"Error getting current user: {str(e)}")
+        return "Unknown"
 
-# Alternative simpler approach if you just need version info
-print("\nBasic Spark Information:")
-print(spark.sparkContext.version)  # Get Spark version directly
+def get_table_metadata(database_name):
+    """
+    Get table metadata safely using SQL commands
+    """
+    try:
+        # List tables in the database
+        tables_df = spark.sql(f"SHOW TABLES IN {database_name}")
+        
+        # Get detailed information for each table
+        table_details = []
+        for row in tables_df.collect():
+            table_name = row.tableName
+            try:
+                # Get table description
+                desc_df = spark.sql(f"DESCRIBE TABLE EXTENDED {database_name}.{table_name}")
+                table_details.append({
+                    "database": database_name,
+                    "table_name": table_name,
+                    "details": desc_df
+                })
+            except Exception as e:
+                print(f"Error getting details for {table_name}: {str(e)}")
+        
+        return table_details
+    except Exception as e:
+        print(f"Error listing tables in {database_name}: {str(e)}")
+        return []
+
+# Example usage:
+def display_table_access_info(database_name, table_name):
+    """
+    Display comprehensive table access information
+    """
+    print(f"Access Information for {database_name}.{table_name}")
+    print("=" * 50)
+    
+    # Get current user
+    current_user = get_current_user()
+    print(f"Current User: {current_user}")
+    
+    # Get table permissions
+    permissions = analyze_table_permissions(database_name, table_name)
+    if permissions is not None:
+        print("\nPermissions:")
+        display(permissions)
+    
+    # Get table metadata
+    print("\nTable Metadata:")
+    metadata = get_table_metadata(database_name)
+    for table in metadata:
+        if table["table_name"] == table_name:
+            display(table["details"])
+
+# Usage example:
+# display_table_access_info("your_database", "your_table")
