@@ -252,3 +252,30 @@ print(f"Total number of columns: {num_cols}")
 # Display sample of the data
 display(processed_df.head(100))
 
+
+***********************************************
+
+# When selecting date fields, we need to be more careful about the paths
+# Let's adjust the date fields in the selection part:
+
+# Replace these date fields:
+col("ns0:content.ns1:award.ns1:relevantContractDates.ns1:signedDate").alias("signed_date"),
+col("ns0:content.ns1:award.ns1:relevantContractDates.ns1:effectiveDate").alias("effective_date"),
+col("ns0:content.ns1:award.ns1:relevantContractDates.ns1:currentCompletionDate").alias("current_completion_date"),
+col("ns0:content.ns1:award.ns1:relevantContractDates.ns1:ultimateCompletionDate").alias("ultimate_completion_date"),
+col("ns0:content.ns1:award.ns1:relevantContractDates.ns1:lastDateToOrder").alias("last_date_to_order"),
+
+# With these corrected ones:
+col("ns0:content.ns1:award.ns1:relevantContractDates.ns1:signedDate").alias("signed_date"),
+col("ns0:content.ns1:award.ns1:relevantContractDates.ns1:effectiveDate").alias("effective_date"),
+col("ns0:content.ns1:award.ns1:relevantContractDates.ns1:currentCompletionDate").alias("completion_date"),
+col("ns0:content.ns1:award.ns1:relevantContractDates.ns1:ultimateCompletionDate").alias("ultimate_completion_date"),
+# Remove the lastDateToOrder field as it seems to not exist in the structure
+
+# Then in the cleaning part:
+cleaned_df = processed_df \
+    .withColumn("signed_date", to_timestamp("signed_date")) \
+    .withColumn("effective_date", to_timestamp("effective_date")) \
+    .withColumn("completion_date", to_timestamp("completion_date")) \
+    .withColumn("ultimate_completion_date", to_timestamp("ultimate_completion_date"))
+    # Remove the lastDateToOrder cleaning
