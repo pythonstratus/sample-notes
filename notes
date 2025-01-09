@@ -1,56 +1,9 @@
-# Basic IDs
-col("ns0:content.ns1:award.ns1:awardID.ns1:awardContractID.ns1:PIID").cast("string").alias("piid"),
-col("ns0:content.ns1:award.ns1:awardID.ns1:awardContractID.ns1:agencyID._value").cast("string").alias("agency_id"),
-col("ns0:content.ns1:award.ns1:awardID.ns1:awardContractID.ns1:agencyID._name").cast("string").alias("agency_name"),
-col("ns0:content.ns1:award.ns1:awardID.ns1:transactionNumber").cast("string").alias("transaction_number"),
+# Vendor Business Types
+col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:businessOrOrganizationType.ns1:isCorporateEntityNotTaxExempt").cast("string").alias("is_corporate_entity_not_tax_exempt"),
+col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:businessOrOrganizationType.ns1:isCorporateEntityTaxExempt").cast("string").alias("is_corporate_entity_tax_exempt"),
+col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:businessOrOrganizationType.ns1:isPartnershipOrLimitedLiabilityPartnership").cast("string").alias("is_partnership_or_llp"),
+col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:businessOrOrganizationType.ns1:isSolePropreitorship").cast("string").alias("is_sole_proprietorship"),
+col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:businessOrOrganizationType.ns1:isSmallAgriculturalCooperative").cast("string").alias("is_agricultural_cooperative"),
 
-# Solicitation Information
-col("ns0:content.ns1:award.ns1:contractData.ns1:solicitationID").cast("string").alias("solicitation_id"),
-
-# Dates
-col("ns0:content.ns1:award.ns1:relevantContractDates.ns1:signedDate").cast("string").alias("signed_date"),
-col("ns0:content.ns1:award.ns1:relevantContractDates.ns1:effectiveDate").cast("string").alias("effective_date"),
-col("ns0:content.ns1:award.ns1:relevantContractDates.ns1:currentCompletionDate").cast("string").alias("completion_date"),
-col("ns0:content.ns1:award.ns1:relevantContractDates.ns1:ultimateCompletionDate").cast("string").alias("ultimate_completion_date"),
-
-# Financial Values
-col("ns0:content.ns1:award.ns1:dollarValues.ns1:baseAndExercisedOptionsValue").cast("string").alias("base_and_exercised_options_value"),
-col("ns0:content.ns1:award.ns1:dollarValues.ns1:obligatedAmount").cast("string").alias("obligated_amount"),
-col("ns0:content.ns1:award.ns1:dollarValues.ns1:baseAndAllOptionsValue").cast("string").alias("base_and_all_options_value"),
-col("ns0:content.ns1:award.ns1:totalDollarValues.ns1:totalBaseAndExercisedOptionsValue").cast("string").alias("total_base_and_exercised_options_value"),
-col("ns0:content.ns1:award.ns1:totalDollarValues.ns1:totalObligatedAmount").cast("string").alias("total_obligated_amount"),
-
-# Office Information
-col("ns0:content.ns1:award.ns1:purchaserInformation.ns1:contractingOfficeAgencyID._value").cast("string").alias("contracting_office_agency_id"),
-col("ns0:content.ns1:award.ns1:purchaserInformation.ns1:contractingOfficeID._value").cast("string").alias("contracting_office_id"),
-col("ns0:content.ns1:award.ns1:purchaserInformation.ns1:fundingRequestingAgencyID._name").cast("string").alias("funding_requesting_agency_name"),
-col("ns0:content.ns1:award.ns1:purchaserInformation.ns1:fundingRequestingAgencyID._value").cast("string").alias("funding_requesting_office_id"),
-
-# Foreign Funding
-col("ns0:content.ns1:award.ns1:purchaserInformation.ns1:foreignFunding._value").cast("string").alias("foreign_funding"),
-
-# Contract Details
-col("ns0:content.ns1:award.ns1:contractData.ns1:contractActionType._value").cast("string").alias("contract_action_type"),
-col("ns0:content.ns1:award.ns1:contractData.ns1:reasonForModification._value").cast("string").alias("contract_action_desc"),
-col("ns0:content.ns1:award.ns1:contractData.ns1:nationalInterestActionCode._value").cast("string").alias("national_interest_code"),
-col("ns0:content.ns1:award.ns1:contractData.ns1:descriptionOfContractRequirement").cast("string").alias("contract_description"),
-
-# Contract Types and Status
-col("ns0:content.ns1:award.ns1:contractData.ns1:typeOfContractPricing._value").cast("string").alias("type_of_contract_pricing"),
-col("ns0:content.ns1:award.ns1:contractData.ns1:multipleOrSingleAwardIDC._value").cast("string").alias("multiple_or_single_award_idc"),
-col("ns0:content.ns1:award.ns1:contractData.ns1:performanceBasedServiceContract._value").cast("string").alias("type_of_performance_based_service"),
-col("ns0:content.ns1:award.ns1:contractData.ns1:contractFinancing._value").cast("string").alias("contract_financing"),
-col("ns0:content.ns1:award.ns1:contractData.ns1:solicitationProcedures._value").cast("string").alias("ordering_procedure"),
-
-# Contract Actions and Requirements
-col("ns0:content.ns1:award.ns1:contractData.ns1:contractActionType._value").cast("string").alias("contract_action_type"),
-col("ns0:content.ns1:award.ns1:contractData.ns1:reasonForModification._description").cast("string").alias("reason_for_modification"),
-col("ns0:content.ns1:award.ns1:contractData.ns1:descriptionOfContractRequirement").cast("string").alias("contract_requirement"),
-col("ns0:content.ns1:award.ns1:contractData.ns1:inherentlyGovernmentalFunction._description").cast("string").alias("inherently_governmental_function"),
-col("ns0:content.ns1:award.ns1:contractData.ns1:GFE-GFP._value").cast("string").alias("gfe_gfp"),
-col("ns0:content.ns1:award.ns1:contractData.ns1:undefinitizedAction._value").cast("string").alias("undefinitized_action"),
-col("ns0:content.ns1:award.ns1:contractData.ns1:consolidatedContract._value").cast("string").alias("consolidated_contract"),
-
-# Performance Requirements
-col("ns0:content.ns1:award.ns1:contractData.ns1:performanceBasedServiceContract._value").cast("string").alias("performance_based_service_contract"),
-col("ns0:content.ns1:award.ns1:contractData.ns1:contingencyHumanitarianPeacekeepingOperation._value").cast("string").alias("contingency_humanitarian_peacekeeping_operation"),
+# Source Process Information
+col("ns0:content.ns1:award.ns1:transactionInformation.ns1:genericStrings.ns1:genericString01").cast("string").alias("source_selection_process")
