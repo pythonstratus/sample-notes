@@ -1,39 +1,21 @@
-def compare_schemas(source_schema, target_schema):
-    # Convert lists to sets for easier comparison
-    source_set = set(source_schema)
-    target_set = set(target_schema)
-    
-    # Find columns that are in source but not in target
-    only_in_source = source_set - target_set
-    
-    # Find columns that are in target but not in source
-    only_in_target = target_set - source_set
-    
-    # Print the differences
-    print("Schema Comparison Results:")
-    print("-" * 30)
-    
-    if only_in_source:
-        print("\nColumns in source but missing in target:")
-        for col in sorted(only_in_source):
-            print(f"- {col}")
-    
-    if only_in_target:
-        print("\nColumns in target but missing in source:")
-        for col in sorted(only_in_target):
-            print(f"- {col}")
-            
-    if not only_in_source and not only_in_target:
-        print("\nBoth schemas are identical!")
-    
-    # Return the differences as a dictionary
-    return {
-        "missing_in_target": sorted(list(only_in_source)),
-        "missing_in_source": sorted(list(only_in_target))
-    }
+-- Method 1: Using string_agg
+SELECT string_agg(column_name, ', ' ORDER BY ordinal_position)
+FROM information_schema.columns
+WHERE table_name = 'your_materialized_view_name';
 
-# Example usage:
-source_schema = ["id", "name", "email", "age", "address"]
-target_schema = ["id", "name", "email", "phone", "city"]
+-- Method 2: Using pg_get_cols (this includes data types)
+SELECT string_agg(col, ', ')
+FROM (
+    SELECT format('%I %s', attname, format_type(atttypid, atttypmod)) as col
+    FROM pg_attribute
+    WHERE attrelid = 'your_materialized_view_name'::regclass
+    AND attnum > 0
+    AND NOT attisdropped
+    ORDER BY attnum
+) t;
 
-differences = compare_schemas(source_schema, target_schema)
+-- Method 3: If you need to specify schema
+SELECT string_agg(column_name, ', ' ORDER BY ordinal_position)
+FROM information_schema.columns
+WHERE table_schema = 'your_schema_name'
+AND table_name = 'your_materialized_view_name';
