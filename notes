@@ -1,4 +1,11 @@
-col("ns0:content.ns1:award.ns1:contractData.ns1:programAcronym").cast("string").alias("program_acronym")
+# For Program Acronym
+coalesce(
+    col("ns0:content.ns1:award.ns1:contractData.ns1:programAcronym"),
+    lit("")
+).cast("string").alias("program_acronym"),
 
-
-col("ns0:content.ns1:award.ns1:contractData.ns1:costAccountingStandardsClause._value").cast("string").alias("cost_accounting_standards")
+# For Cost Accounting Standards
+coalesce(
+    col("ns0:content.ns1:award.ns1:contractData.ns1:costAccountingStandardsClause._value"),
+    lit("")
+).cast("string").alias("cost_accounting_standards")
