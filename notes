@@ -1,29 +1,47 @@
 # Databricks notebook source
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
-import xml.etree.ElementTree as ET
 
 # COMMAND ----------
-# Read XML file with larger buffer
-xml_content = dbutils.fs.head("/Volumes/tagging/fpds_raw/landing/fpds_output_2025-01-03.xml", 10485760)  # Read 10MB
+# Read large XML file using Spark XML reader
+contract_df = spark.read \
+    .format("xml") \
+    .option("rootTag", "feed") \
+    .option("rowTag", "ns0:entry") \
+    .option("valueTag", "_value") \
+    .option("attributePrefix", "_") \
+    .load("/Volumes/tagging/fpds_raw/landing/fpds_output_2025-01-03.xml")
 
-# Debug prints
-print("XML Content Length:", len(xml_content))
-print("\nChecking if XML ends properly:")
-print("Last 100 characters:")
-print(xml_content[-100:])
+# COMMAND ----------
+# Extract and transform the data
+processed_df = contract_df.select(
+    col("ns0:content.ns1:award.ns1:awardID.ns1:awardContractID.ns1:PIID").alias("piid"),
+    col("ns0:content.ns1:award.ns1:awardID.ns1:awardContractID.ns1:agencyID").alias("agency_id"),
+    col("ns0:content.ns1:award.ns1:awardID.ns1:awardContractID.ns1:agencyID._name").alias("agency_name"),
+    col("ns0:content.ns1:award.ns1:relevantContractDates.ns1:signedDate").alias("signed_date"),
+    col("ns0:content.ns1:award.ns1:relevantContractDates.ns1:effectiveDate").alias("effective_date"),
+    col("ns0:content.ns1:award.ns1:dollarValues.ns1:obligatedAmount").alias("obligated_amount"),
+    col("ns0:content.ns1:award.ns1:dollarValues.ns1:baseAndExercisedOptionsValue").alias("base_and_exercised_options_value"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorHeader.ns1:vendorName").alias("vendor_name"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorLocation.ns1:streetAddress").alias("street_address"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorLocation.ns1:city").alias("city"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorLocation.ns1:state").alias("state"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorLocation.ns1:ZIPCode").alias("zip_code")
+)
 
-# Add XML declaration if missing
-if not xml_content.startswith("<?xml"):
-    xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n' + xml_content
+# Clean up the data
+cleaned_df = processed_df.withColumn("signed_date", to_timestamp("signed_date")) \
+    .withColumn("effective_date", to_timestamp("effective_date")) \
+    .withColumn("obligated_amount", col("obligated_amount").cast(DecimalType(18,2))) \
+    .withColumn("base_and_exercised_options_value", col("base_and_exercised_options_value").cast(DecimalType(18,2))) \
+    .withColumn("zip_code", trim(col("zip_code"))) \
+    .withColumn("state", trim(col("state"))) \
+    .withColumn("city", trim(col("city"))) \
+    .withColumn("vendor_name", trim(col("vendor_name")))
 
-# Check if the XML is well-formed
-if not xml_content.strip().endswith("</feed>"):
-    print("Warning: XML might be truncated - doesn't end with </feed>")
-    # Try to find the last complete entry and close the feed
-    last_entry_end = xml_content.rfind("</ns0:entry>")
-    if last_entry_end > 0:
-        xml_content = xml_content[:last_entry_end] + "</ns0:entry></feed>"
-        print("Fixed XML by closing the last entry and feed tags")
+# COMMAND ----------
+display(cleaned_df)
 
-# Continue with the rest of your parsing code...
+# COMMAND ----------
+# Save if needed
+# cleaned_df.write.mode("overwrite").parquet("/path/to/output/contracts.parquet")
