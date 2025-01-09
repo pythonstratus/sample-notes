@@ -13,20 +13,20 @@ contract_df = spark.read \
     .load("/Volumes/tagging/fpds_raw/landing/fpds_output_2025-01-03.xml")
 
 # COMMAND ----------
-# Extract and transform the data with corrected paths
+# Extract and transform the data with corrected paths based on schema
 processed_df = contract_df.select(
-    col("content.award.awardID.awardContractID.PIID").alias("piid"),
-    col("content.award.awardID.awardContractID.agencyID").alias("agency_id"),
-    col("content.award.awardID.awardContractID.agencyID._name").alias("agency_name"),
-    col("content.award.relevantContractDates.signedDate").alias("signed_date"),
-    col("content.award.relevantContractDates.effectiveDate").alias("effective_date"),
-    col("content.award.dollarValues.obligatedAmount").alias("obligated_amount"),
-    col("content.award.dollarValues.baseAndExercisedOptionsValue").alias("base_and_exercised_options_value"),
-    col("content.award.vendor.vendorHeader.vendorName").alias("vendor_name"),
-    col("content.award.vendor.vendorLocation.streetAddress").alias("street_address"),
-    col("content.award.vendor.vendorLocation.city").alias("city"),
-    col("content.award.vendor.vendorLocation.state").alias("state"),
-    col("content.award.vendor.vendorLocation.ZIPCode").alias("zip_code")
+    col("ns0:content.ns1:award.ns1:awardID.ns1:awardContractID.ns1:PIID").alias("piid"),
+    col("ns0:content.ns1:award.ns1:awardID.ns1:awardContractID.ns1:agencyID._value").alias("agency_id"),
+    col("ns0:content.ns1:award.ns1:awardID.ns1:awardContractID.ns1:agencyID._name").alias("agency_name"),
+    col("ns0:content.ns1:award.ns1:relevantContractDates.ns1:signedDate").alias("signed_date"),
+    col("ns0:content.ns1:award.ns1:relevantContractDates.ns1:effectiveDate").alias("effective_date"),
+    col("ns0:content.ns1:award.ns1:dollarValues.ns1:obligatedAmount").alias("obligated_amount"),
+    col("ns0:content.ns1:award.ns1:dollarValues.ns1:baseAndExercisedOptionsValue").alias("base_and_exercised_options_value"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorHeader.ns1:vendorName").alias("vendor_name"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorLocation.ns1:streetAddress").alias("street_address"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorLocation.ns1:city").alias("city"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorLocation.ns1:state._value").alias("state"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorLocation.ns1:ZIPCode._value").alias("zip_code")
 )
 
 # Clean up the data
