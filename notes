@@ -1,4 +1,4 @@
-# Clean up the data with fixes for amounts and contract description
+# Clean up the data with enhanced fixes for amounts and contract description
 cleaned_df = processed_df \
     .withColumn("signed_date", to_timestamp("signed_date")) \
     .withColumn("effective_date", to_timestamp("effective_date")) \
@@ -7,11 +7,11 @@ cleaned_df = processed_df \
     .withColumn("created_date", to_timestamp("created_date")) \
     .withColumn("last_modified_date", to_timestamp("last_modified_date")) \
     \
-    # Fix monetary amounts to show 2 decimal places
-    .withColumn("obligated_amount", round(col("obligated_amount").cast(DecimalType(18,2)), 2)) \
-    .withColumn("base_and_exercised_options_value", round(col("base_and_exercised_options_value").cast(DecimalType(18,2)), 2)) \
-    .withColumn("base_and_all_options_value", round(col("base_and_all_options_value").cast(DecimalType(18,2)), 2)) \
-    .withColumn("total_obligated_amount", round(col("total_obligated_amount").cast(DecimalType(18,2)), 2)) \
+    # Fix monetary amounts - handle scientific notation and ensure 2 decimal places
+    .withColumn("obligated_amount", format_number(col("obligated_amount").cast("double"), 2)) \
+    .withColumn("base_and_exercised_options_value", format_number(col("base_and_exercised_options_value").cast("double"), 2)) \
+    .withColumn("base_and_all_options_value", format_number(col("base_and_all_options_value").cast("double"), 2)) \
+    .withColumn("total_obligated_amount", format_number(col("total_obligated_amount").cast("double"), 2)) \
     \
     # Clean up strings
     .withColumn("zip_code", trim(col("zip_code"))) \
@@ -20,12 +20,22 @@ cleaned_df = processed_df \
     .withColumn("vendor_name", trim(col("vendor_name"))) \
     .withColumn("phone_no", trim(col("phone_no"))) \
     \
-    # Clean up contract description
+    # Enhanced contract description cleanup
     .withColumn("contract_description", 
-        when(col("contract_description").startswith("IGF::OT::IGF"), 
-             regexp_replace(col("contract_description"), "^IGF::OT::IGF\\s*", ""))
-        .otherwise(col("contract_description"))) \
-    .withColumn("contract_description", trim(col("contract_description")))
+        regexp_replace(
+            regexp_replace(
+                regexp_replace(col("contract_description"), 
+                    "IGF::OT::IGF\\s*", ""  # Remove IGF::OT::IGF
+                ),
+                "\\s+", " "  # Replace multiple spaces with single space
+            ),
+            "^\\s*|\\s*$", ""  # Trim spaces at start and end
+        )
+    ) \
+    # Remove any standalone IGF text that might remain
+    .withColumn("contract_description", 
+        regexp_replace(col("contract_description"), "^IGF\\s*|\\s*IGF$", "")
+    )
 
 # Display first 100 rows
 display(cleaned_df.head(100))
