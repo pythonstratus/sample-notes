@@ -1,1 +1,4 @@
-col("ns0:content.ns1:award.ns1:contractData.ns1:multipleOrSingleAwardIDC._value").cast("string").alias("multiple_or_single_award_idc")
+col("ns0:content.ns1:award.ns1:contractData.ns1:contractFinancing._value").cast("string").alias("contract_financing")
+
+
+col("ns0:content.ns1:award.ns1:contractData.`ns1:GFE-GFP`._value").cast("string").alias("gfe_gfp")
