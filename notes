@@ -36,3 +36,219 @@ processed_df = contract_df.select(
 )
 
 print("First part of fields added. Would you like to see the second part focused on contract details and vendor information?")
+
+********************* Second Part **************************
+# Part 2: Contract Details, Types and Classifications
+processed_df = processed_df.select('*',  # Keep all previous columns
+    # Contract Types and Status
+    col("ns0:content.ns1:award.ns1:contractData.ns1:typeOfContractPricing._value").alias("type_of_contract_pricing"),
+    col("ns0:content.ns1:award.ns1:contractData.ns1:typeOfIDC._value").alias("type_of_idc"),
+    col("ns0:content.ns1:award.ns1:contractData.ns1:multipleOrSingleAwardIDC._value").alias("multiple_or_single_award_idc"),
+    col("ns0:content.ns1:award.ns1:contractData.ns1:typeOfFeeForUseOfService._value").alias("type_of_fee_for_use_service"),
+    col("ns0:content.ns1:award.ns1:contractData.ns1:whoCanUse").alias("who_can_use"),
+    col("ns0:content.ns1:award.ns1:contractData.ns1:orderingProcedure").alias("ordering_procedure"),
+    
+    # Contract Actions and Requirements
+    col("ns0:content.ns1:award.ns1:contractData.ns1:contractActionType._value").alias("contract_action_type"),
+    col("ns0:content.ns1:award.ns1:contractData.ns1:reasonForModification._value").alias("reason_for_modification"),
+    col("ns0:content.ns1:award.ns1:contractData.ns1:descriptionOfContractRequirement").alias("description_of_contract_requirement"),
+    col("ns0:content.ns1:award.ns1:contractData.ns1:undefinitizedAction._value").alias("undefinitized_action"),
+    col("ns0:content.ns1:award.ns1:contractData.ns1:multiYearContract._value").alias("multi_year_contract"),
+    
+    # Performance Requirements
+    col("ns0:content.ns1:award.ns1:contractData.ns1:performanceBasedServiceContract._value").alias("performance_based_service_contract"),
+    col("ns0:content.ns1:award.ns1:contractData.ns1:contingencyHumanitarianPeacekeepingOperation._value").alias("contingency_humanitarian_peacekeeping_operation"),
+    
+    # Contract Cost Information
+    col("ns0:content.ns1:award.ns1:contractData.ns1:costOrPricingData._value").alias("cost_or_pricing_data"),
+    col("ns0:content.ns1:award.ns1:contractData.ns1:costAccountingStandardsClause._value").alias("cost_accounting_standards_clause"),
+    
+    # Program and Project Information
+    col("ns0:content.ns1:award.ns1:contractData.ns1:majorProgramCode").alias("major_program_code"),
+    col("ns0:content.ns1:award.ns1:contractData.ns1:programAcronym").alias("program_acronym"),
+    col("ns0:content.ns1:award.ns1:contractData.ns1:nationalInterestActionCode._value").alias("national_interest_action_code"),
+    
+    # Purchase Methods
+    col("ns0:content.ns1:award.ns1:contractData.ns1:purchaseCardAsPaymentMethod._value").alias("purchase_card_as_payment_method"),
+    col("ns0:content.ns1:award.ns1:contractData.ns1:numberOfActions").alias("number_of_actions"),
+    
+    # Legislative and Regulatory
+    col("ns0:content.ns1:award.ns1:legislativeMandates.ns1:ClingerCohenAct._value").alias("clinger_cohen_act"),
+    col("ns0:content.ns1:award.ns1:legislativeMandates.ns1:constructionWageRateRequirements._value").alias("construction_wage_rate_requirements"),
+    col("ns0:content.ns1:award.ns1:legislativeMandates.ns1:laborStandards._value").alias("labor_standards"),
+    col("ns0:content.ns1:award.ns1:legislativeMandates.ns1:materialsSuppliesArticlesEquipment._value").alias("materials_supplies_articles_equipment"),
+    
+    # Contracting Authority
+    col("ns0:content.ns1:award.ns1:legislativeMandates.ns1:interagencyContractingAuthority._value").alias("interagency_contracting_authority"),
+    col("ns0:content.ns1:award.ns1:legislativeMandates.ns1:otherStatutoryAuthority").alias("other_statutory_authority"),
+    
+    # System Identifiers
+    col("ns0:content.ns1:award.ns1:contractData.ns1:agencyIdentifier").alias("agency_identifier"),
+    col("ns0:content.ns1:award.ns1:contractData.ns1:mainAccountCode").alias("main_account_code"),
+    col("ns0:content.ns1:award.ns1:contractData.ns1:subAccountCode").alias("sub_account_code"),
+    
+    # Contract Consolidation Information
+    col("ns0:content.ns1:award.ns1:contractData.ns1:consolidatedContract._value").alias("consolidated_contract"),
+    col("ns0:content.ns1:award.ns1:contractData.ns1:contractFinancing._value").alias("contract_financing")
+)
+
+print("Second part of fields added. Would you like to see the third part focused on vendor information and socioeconomic indicators?")
+
+***************** Third Part *************************
+# Part 3: Vendor Information and Socioeconomic Indicators
+processed_df = processed_df.select('*',  # Keep all previous columns
+    # Basic Vendor Information
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorHeader.ns1:vendorName").alias("vendor_name"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorHeader.ns1:vendorAlternateName").alias("vendor_alternate_name"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorHeader.ns1:vendorDoingAsBusinessName").alias("vendor_doing_as_business_name"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorHeader.ns1:vendorLegalOrganizationName").alias("vendor_legal_organization_name"),
+    
+    # Vendor Location
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorLocation.ns1:streetAddress").alias("street_address"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorLocation.ns1:streetAddress2").alias("street_address2"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorLocation.ns1:streetAddress3").alias("street_address3"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorLocation.ns1:city").alias("city"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorLocation.ns1:state._value").alias("state"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorLocation.ns1:ZIPCode._value").alias("zip_code"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorLocation.ns1:countryCode._value").alias("country_code"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorLocation.ns1:phoneNo").alias("phone_no"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorLocation.ns1:faxNo").alias("fax_no"),
+    
+    # Vendor Business Types
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:isCorporateEntityNotTaxExempt").alias("is_corporate_entity_not_tax_exempt"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:isCorporateEntityTaxExempt").alias("is_corporate_entity_tax_exempt"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:isPartnershipOrLimitedLiabilityPartnership").alias("is_partnership_or_llp"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:isSolePropreitorship").alias("is_sole_proprietorship"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:isSmallAgriculturalCooperative").alias("is_small_agricultural_cooperative"),
+    
+    # Socioeconomic Indicators
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:isSmallBusiness").alias("is_small_business"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:isVeteranOwned").alias("is_veteran_owned"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:isServiceRelatedDisabledVeteranOwnedBusiness").alias("is_service_disabled_veteran_owned"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:isWomenOwned").alias("is_women_owned"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:isWomenOwnedSmallBusiness").alias("is_women_owned_small_business"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:isEconomicallyDisadvantagedWomenOwnedSmallBusiness").alias("is_economically_disadvantaged_women_owned"),
+    
+    # Minority Business Indicators
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:minorityOwned.ns1:isMinorityOwned").alias("is_minority_owned"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:minorityOwned.ns1:isAsianPacificAmericanOwnedBusiness").alias("is_asian_pacific_owned"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:minorityOwned.ns1:isBlackAmericanOwnedBusiness").alias("is_black_owned"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:minorityOwned.ns1:isHispanicAmericanOwnedBusiness").alias("is_hispanic_owned"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:minorityOwned.ns1:isNativeAmericanOwnedBusiness").alias("is_native_american_owned"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:minorityOwned.ns1:isSubContinentAsianAmericanOwnedBusiness").alias("is_subcontinent_asian_owned"),
+    
+    # Additional Business Indicators
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:isLaborSurplusAreaFirm").alias("is_labor_surplus_area_firm"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorLineOfBusiness.ns1:isManufacturerOfGoods").alias("is_manufacturer_of_goods")
+)
+
+print("Third part of fields added. Would you like to see the fourth part focused on competition, product/service information, and transaction details?")
+
+**************** Fourth Part ********************
+
+# Part 4: Competition, Product/Service Information, and Transaction Details
+processed_df = processed_df.select('*',  # Keep all previous columns
+    # Competition Information
+    col("ns0:content.ns1:award.ns1:competition.ns1:extentCompeted._value").alias("extent_competed"),
+    col("ns0:content.ns1:award.ns1:competition.ns1:solicitationProcedures._value").alias("solicitation_procedures"),
+    col("ns0:content.ns1:award.ns1:competition.ns1:typeOfSetAside._value").alias("type_of_set_aside"),
+    col("ns0:content.ns1:award.ns1:competition.ns1:evaluatedPreference._value").alias("evaluated_preference"),
+    col("ns0:content.ns1:award.ns1:competition.ns1:numberOfOffersReceived").alias("number_of_offers_received"),
+    col("ns0:content.ns1:award.ns1:competition.ns1:numberOfOffersSource._value").alias("number_of_offers_source"),
+    col("ns0:content.ns1:award.ns1:competition.ns1:commercialItemAcquisitionProcedures._value").alias("commercial_item_acquisition_procedures"),
+    col("ns0:content.ns1:award.ns1:competition.ns1:commercialItemTestProgram._value").alias("commercial_item_test_program"),
+    col("ns0:content.ns1:award.ns1:competition.ns1:smallBusinessCompetitivenessDemonstrationProgram").alias("small_business_competitiveness_program"),
+    col("ns0:content.ns1:award.ns1:competition.ns1:priceEvaluationPercentDifference").alias("price_evaluation_percent_difference"),
+    
+    # Product/Service Information
+    col("ns0:content.ns1:award.ns1:productOrServiceInformation.ns1:productOrServiceCode._value").alias("product_service_code"),
+    col("ns0:content.ns1:award.ns1:productOrServiceInformation.ns1:productOrServiceCode._description").alias("product_service_description"),
+    col("ns0:content.ns1:award.ns1:productOrServiceInformation.ns1:principalNAICSCode._value").alias("naics_code"),
+    col("ns0:content.ns1:award.ns1:productOrServiceInformation.ns1:principalNAICSCode._description").alias("naics_description"),
+    col("ns0:content.ns1:award.ns1:productOrServiceInformation.ns1:recoveredMaterialClauses._value").alias("recovered_material_clauses"),
+    col("ns0:content.ns1:award.ns1:productOrServiceInformation.ns1:manufacturingOrganizationType._value").alias("manufacturing_organization_type"),
+    col("ns0:content.ns1:award.ns1:productOrServiceInformation.ns1:countryOfOrigin._value").alias("country_of_origin"),
+    col("ns0:content.ns1:award.ns1:productOrServiceInformation.ns1:placeOfManufacture._value").alias("place_of_manufacture"),
+    
+    # Transaction Details
+    col("ns0:content.ns1:award.ns1:transactionInformation.ns1:createdBy").alias("created_by"),
+    col("ns0:content.ns1:award.ns1:transactionInformation.ns1:createdDate").alias("created_date"),
+    col("ns0:content.ns1:award.ns1:transactionInformation.ns1:lastModifiedBy").alias("last_modified_by"),
+    col("ns0:content.ns1:award.ns1:transactionInformation.ns1:lastModifiedDate").alias("last_modified_date"),
+    col("ns0:content.ns1:award.ns1:transactionInformation.ns1:status._value").alias("status"),
+    col("ns0:content.ns1:award.ns1:transactionInformation.ns1:approvedBy").alias("approved_by"),
+    col("ns0:content.ns1:award.ns1:transactionInformation.ns1:approvedDate").alias("approved_date"),
+    col("ns0:content.ns1:award.ns1:transactionInformation.ns1:closedBy").alias("closed_by"),
+    col("ns0:content.ns1:award.ns1:transactionInformation.ns1:closedDate").alias("closed_date"),
+    col("ns0:content.ns1:award.ns1:transactionInformation.ns1:closedStatus").alias("closed_status"),
+    
+    # Entity Identifiers
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:entityIdentifiers.ns1:vendorUEIInformation.ns1:UEI").alias("uei"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:entityIdentifiers.ns1:vendorUEIInformation.ns1:UEILegalBusinessName").alias("uei_legal_business_name"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:entityIdentifiers.ns1:vendorUEIInformation.ns1:ultimateParentUEI").alias("ultimate_parent_uei"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:entityIdentifiers.ns1:vendorUEIInformation.ns1:ultimateParentUEIName").alias("ultimate_parent_uei_name")
+)
+
+print("Fourth part of fields added. Would you like to see the fifth and final part focused on place of performance and remaining indicators?")
+
+********* Fifth Part *******************
+# Part 5: Place of Performance and Remaining Fields
+processed_df = processed_df.select('*',  # Keep all previous columns
+    # Place of Performance
+    col("ns0:content.ns1:award.ns1:placeOfPerformance.ns1:placeOfPerformanceCongressionalDistrict").alias("pop_congressional_district"),
+    col("ns0:content.ns1:award.ns1:placeOfPerformance.ns1:placeOfPerformanceZIPCode._value").alias("pop_zip_code"),
+    col("ns0:content.ns1:award.ns1:placeOfPerformance.ns1:placeOfPerformanceZIPCode._city").alias("pop_city"),
+    col("ns0:content.ns1:award.ns1:placeOfPerformance.ns1:placeOfPerformanceZIPCode._county").alias("pop_county"),
+    col("ns0:content.ns1:award.ns1:placeOfPerformance.ns1:principalPlaceOfPerformance.ns1:stateCode._value").alias("pop_state"),
+    col("ns0:content.ns1:award.ns1:placeOfPerformance.ns1:principalPlaceOfPerformance.ns1:countryCode._value").alias("pop_country"),
+    
+    # Vendor Registration Details
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:ccrRegistrationDetails.ns1:registrationDate").alias("registration_date"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:ccrRegistrationDetails.ns1:renewalDate").alias("renewal_date"),
+    
+    # Educational Institution Indicators
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:typeOfEducationalEntity.ns1:is1862LandGrantCollege").alias("is_1862_land_grant_college"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:typeOfEducationalEntity.ns1:is1890LandGrantCollege").alias("is_1890_land_grant_college"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:typeOfEducationalEntity.ns1:is1994LandGrantCollege").alias("is_1994_land_grant_college"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:typeOfEducationalEntity.ns1:isHistoricallyBlackCollegeOrUniversity").alias("is_historically_black_college"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:typeOfEducationalEntity.ns1:isMinorityInstitution").alias("is_minority_institution"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:typeOfEducationalEntity.ns1:isPrivateUniversityOrCollege").alias("is_private_university"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:typeOfEducationalEntity.ns1:isStateControlledInstitutionofHigherLearning").alias("is_state_controlled_institution"),
+    
+    # Government Entity Types
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:typeOfGovernmentEntity.ns1:isAirportAuthority").alias("is_airport_authority"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:typeOfGovernmentEntity.ns1:isCouncilOfGovernments").alias("is_council_of_governments"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:typeOfGovernmentEntity.ns1:isHousingAuthoritiesPublicOrTribal").alias("is_housing_authority"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:typeOfGovernmentEntity.ns1:isInterstateEntity").alias("is_interstate_entity"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:typeOfGovernmentEntity.ns1:isPlanningCommission").alias("is_planning_commission"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:typeOfGovernmentEntity.ns1:isPortAuthority").alias("is_port_authority"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:typeOfGovernmentEntity.ns1:isTransitAuthority").alias("is_transit_authority"),
+    
+    # Vendor Certification Details
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorCertifications.ns1:isDOTCertifiedDisadvantagedBusinessEnterprise").alias("is_dot_certified_disadvantaged"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorCertifications.ns1:isSBACertified8AProgramParticipant").alias("is_8a_program_participant"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorCertifications.ns1:isSBACertifiedHUBZone").alias("is_hubzone"),
+    
+    # Organization Status Indicators
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorOrganizationFactors.ns1:isLimitedLiabilityCorporation").alias("is_limited_liability_corporation"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorOrganizationFactors.ns1:isShelteredWorkshop").alias("is_sheltered_workshop"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorOrganizationFactors.ns1:organizationalType").alias("organizational_type"),
+    
+    # Line of Business Indicators
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorLineOfBusiness.ns1:isHospital").alias("is_hospital"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorLineOfBusiness.ns1:isFoundation").alias("is_foundation"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorLineOfBusiness.ns1:isVeterinaryHospital").alias("is_veterinary_hospital"),
+    
+    # Source Process Information
+    col("ns0:content.ns1:award.ns1:transactionInformation.ns1:genericStrings.ns1:genericString06").alias("source_selection_process")
+)
+
+# Get row and column counts
+num_rows = processed_df.count()
+num_cols = len(processed_df.columns)
+print(f"Total number of rows: {num_rows}")
+print(f"Total number of columns: {num_cols}")
+
+# Display sample of the data
+display(processed_df.head(100))
+
