@@ -1,4 +1,1 @@
-when(
-    col("ns0:content.ns1:award.ns1:genericTags.ns1:genericStrings.ns1:genericString01").isNotNull(),
-    col("ns0:content.ns1:award.ns1:genericTags.ns1:genericStrings.ns1:genericString01").cast("timestamp").cast("string")
-).otherwise(lit("")).alias("source_selection_process")
+col("ns0:content.ns1:award.ns1:contractData.ns1:programAcronym").cast("string").alias("program_acronym")
