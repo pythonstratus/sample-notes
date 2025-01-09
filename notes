@@ -1,4 +1,4 @@
 coalesce(
-    col("ns0:content.ns1:IDV.ns1:contractData.ns1:programAcronym"),
+    col("ns0:content.ns1:IDV.ns1:contractData.ns1:costAccountingStandardsClause._value"),
     lit("")
-).cast("string").alias("program_acronym")
+).cast("string").alias("cost_accounting_standards")
