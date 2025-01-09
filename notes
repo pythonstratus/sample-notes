@@ -1,9 +1,1 @@
-# Vendor Business Types
-col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:businessOrOrganizationType.ns1:isCorporateEntityNotTaxExempt").cast("string").alias("is_corporate_entity_not_tax_exempt"),
-col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:businessOrOrganizationType.ns1:isCorporateEntityTaxExempt").cast("string").alias("is_corporate_entity_tax_exempt"),
-col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:businessOrOrganizationType.ns1:isPartnershipOrLimitedLiabilityPartnership").cast("string").alias("is_partnership_or_llp"),
-col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:businessOrOrganizationType.ns1:isSolePropreitorship").cast("string").alias("is_sole_proprietorship"),
-col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:businessOrOrganizationType.ns1:isSmallAgriculturalCooperative").cast("string").alias("is_agricultural_cooperative"),
-
-# Source Process Information
-col("ns0:content.ns1:award.ns1:transactionInformation.ns1:genericStrings.ns1:genericString01").cast("string").alias("source_selection_process")
+col("ns0:content.ns1:award.ns1:contractData.ns1:multipleOrSingleAwardIDC._value").cast("string").alias("multiple_or_single_award_idc")
