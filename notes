@@ -1,5 +1,29 @@
+# Databricks notebook source
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+import xml.etree.ElementTree as ET
+
+# COMMAND ----------
+# Read XML file with larger buffer
+xml_content = dbutils.fs.head("/Volumes/tagging/fpds_raw/landing/fpds_output_2025-01-03.xml", 10485760)  # Read 10MB
+
+# Debug prints
 print("XML Content Length:", len(xml_content))
-print("First 500 characters:")
-print(xml_content[:500])
-print("\nDoes content start with <?xml?: ", xml_content.startswith("<?xml"))
-print("Position of first <feed> tag:", xml_content.find("<feed>"))
+print("\nChecking if XML ends properly:")
+print("Last 100 characters:")
+print(xml_content[-100:])
+
+# Add XML declaration if missing
+if not xml_content.startswith("<?xml"):
+    xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n' + xml_content
+
+# Check if the XML is well-formed
+if not xml_content.strip().endswith("</feed>"):
+    print("Warning: XML might be truncated - doesn't end with </feed>")
+    # Try to find the last complete entry and close the feed
+    last_entry_end = xml_content.rfind("</ns0:entry>")
+    if last_entry_end > 0:
+        xml_content = xml_content[:last_entry_end] + "</ns0:entry></feed>"
+        print("Fixed XML by closing the last entry and feed tags")
+
+# Continue with the rest of your parsing code...
