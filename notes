@@ -4,28 +4,82 @@ from pyspark.sql.types import *
 import xml.etree.ElementTree as ET
 
 # COMMAND ----------
-# Define schema (keeping previous schema definition)
-contract_schema = StructType([
-    # ... previous schema fields remain the same ...
-])
-
-# COMMAND ----------
-# Read XML file using spark.read instead of sparkContext
+# Read XML file
 xml_df = spark.read.format("text").load("/Volumes/tagging/fpds_raw/landing/fpds_output_2025-01-03.xml")
-
-# Get the XML content as string
 xml_content = xml_df.collect()[0][0]
 
 # COMMAND ----------
-# Rest of the parsing logic remains the same
 def parse_fpds_xml(xml_content):
-    root = ET.fromstring(xml_content)
-    # ... rest of parsing function remains same ...
+    try:
+        root = ET.fromstring(xml_content)
+        # Update namespace mapping to include both ns0 and ns1
+        ns = {
+            'ns0': 'http://www.w3.org/2005/Atom',
+            'ns1': 'https://www.fpds.gov/FPDS'
+        }
+        
+        contract_data = []
+        
+        # Look for award inside ns0:entry/ns0:content/ns1:award
+        for entry in root.findall('.//ns0:entry', ns):
+            content = entry.find('.//ns0:content', ns)
+            if content is not None:
+                award = content.find('.//ns1:award', ns)
+                if award is not None:
+                    contract = {}
+                    
+                    # Extract contract data using proper namespace paths
+                    award_contract_id = award.find('.//ns1:awardContractID', ns)
+                    if award_contract_id is not None:
+                        contract['piid'] = award_contract_id.find('.//ns1:PIID', ns).text if award_contract_id.find('.//ns1:PIID', ns) is not None else None
+                        agency_id = award_contract_id.find('.//ns1:agencyID', ns)
+                        if agency_id is not None:
+                            contract['agency_id'] = agency_id.text
+                            contract['agency_name'] = agency_id.get('name')
+                    
+                    # Extract dates
+                    relevant_dates = award.find('.//ns1:relevantContractDates', ns)
+                    if relevant_dates is not None:
+                        contract['signed_date'] = relevant_dates.find('.//ns1:signedDate', ns).text if relevant_dates.find('.//ns1:signedDate', ns) is not None else None
+                        contract['effective_date'] = relevant_dates.find('.//ns1:effectiveDate', ns).text if relevant_dates.find('.//ns1:effectiveDate', ns) is not None else None
+                    
+                    # Extract dollar values
+                    dollar_values = award.find('.//ns1:dollarValues', ns)
+                    if dollar_values is not None:
+                        contract['obligated_amount'] = dollar_values.find('.//ns1:obligatedAmount', ns).text if dollar_values.find('.//ns1:obligatedAmount', ns) is not None else None
+                        contract['base_and_exercised_options_value'] = dollar_values.find('.//ns1:baseAndExercisedOptionsValue', ns).text if dollar_values.find('.//ns1:baseAndExercisedOptionsValue', ns) is not None else None
+                    
+                    # Extract vendor information
+                    vendor = award.find('.//ns1:vendor', ns)
+                    if vendor is not None:
+                        vendor_header = vendor.find('.//ns1:vendorHeader', ns)
+                        if vendor_header is not None:
+                            contract['vendor_name'] = vendor_header.find('.//ns1:vendorName', ns).text if vendor_header.find('.//ns1:vendorName', ns) is not None else None
+                        
+                        vendor_location = vendor.find('.//ns1:vendorLocation', ns)
+                        if vendor_location is not None:
+                            contract['street_address'] = vendor_location.find('.//ns1:streetAddress', ns).text if vendor_location.find('.//ns1:streetAddress', ns) is not None else None
+                            contract['city'] = vendor_location.find('.//ns1:city', ns).text if vendor_location.find('.//ns1:city', ns) is not None else None
+                            contract['state'] = vendor_location.find('.//ns1:state', ns).text if vendor_location.find('.//ns1:state', ns) is not None else None
+                            contract['zip_code'] = vendor_location.find('.//ns1:ZIPCode', ns).text if vendor_location.find('.//ns1:ZIPCode', ns) is not None else None
+                    
+                    contract_data.append(contract)
+        
+        return contract_data
+    except ET.ParseError as e:
+        print(f"XML Parse Error: {str(e)}")
+        raise
+    except Exception as e:
+        print(f"Other error: {str(e)}")
+        raise
 
 # COMMAND ----------
-# Process the data
-contract_data = parse_fpds_xml(xml_content)
-contract_df = spark.createDataFrame(contract_data, schema=contract_schema)
-
-# COMMAND ----------
-display(contract_df)
+try:
+    contract_data = parse_fpds_xml(xml_content)
+    if contract_data:
+        contract_df = spark.createDataFrame(contract_data, schema=contract_schema)
+        display(contract_df)
+    else:
+        print("No contract data was parsed")
+except Exception as e:
+    print(f"Error in processing: {str(e)}")
