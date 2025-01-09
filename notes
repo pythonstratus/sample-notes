@@ -1,3 +1,3 @@
-# Program and Project Information
-col("ns0:content.ns1:award.ns1:contractData.ns1:majorProgramCode").cast("string").alias("major_program_code"),
-col("ns0:content.ns1:award.ns1:contractData.ns1:programAcronym").cast("string").alias("program_acronym")
+col("ns0:content.ns1:award.ns1:contractData.programAcronym").cast("string").alias("program_acronym")
+
+col("ns0:content.ns1:award.ns1:contractData.majorProgramCode").cast("string").alias("major_program_code")
