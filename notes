@@ -1,1 +1,1 @@
-col("`ns0:content`.`ns1:award`.`ns1:contractData`.`ns1:programAcronym`").cast("string").alias("program_acronym")
+expr("ns0:content/ns1:award/ns1:contractData/ns1:programAcronym").cast("string").alias("program_acronym")
