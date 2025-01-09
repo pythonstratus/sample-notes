@@ -1,4 +1,39 @@
-coalesce(
-    col("ns0:content.ns1:IDV.ns1:contractData.ns1:costAccountingStandardsClause._value"),
-    lit("")
-).cast("string").alias("cost_accounting_standards")
+def compare_schemas(source_schema, target_schema):
+    # Convert lists to sets for easier comparison
+    source_set = set(source_schema)
+    target_set = set(target_schema)
+    
+    # Find columns that are in source but not in target
+    only_in_source = source_set - target_set
+    
+    # Find columns that are in target but not in source
+    only_in_target = target_set - source_set
+    
+    # Print the differences
+    print("Schema Comparison Results:")
+    print("-" * 30)
+    
+    if only_in_source:
+        print("\nColumns in source but missing in target:")
+        for col in sorted(only_in_source):
+            print(f"- {col}")
+    
+    if only_in_target:
+        print("\nColumns in target but missing in source:")
+        for col in sorted(only_in_target):
+            print(f"- {col}")
+            
+    if not only_in_source and not only_in_target:
+        print("\nBoth schemas are identical!")
+    
+    # Return the differences as a dictionary
+    return {
+        "missing_in_target": sorted(list(only_in_source)),
+        "missing_in_source": sorted(list(only_in_target))
+    }
+
+# Example usage:
+source_schema = ["id", "name", "email", "age", "address"]
+target_schema = ["id", "name", "email", "phone", "city"]
+
+differences = compare_schemas(source_schema, target_schema)
