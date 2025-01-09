@@ -1,21 +1,38 @@
-I see another field error for "ns1:isMinorityOwned". Let's fix this field and keep the row count code. Here's how we should modify the relevant parts:
+# Part 1: Basic Contract and Award Information
+processed_df = contract_df.select(
+    # Basic IDs
+    col("ns0:content.ns1:award.ns1:awardID.ns1:awardContractID.ns1:PIID").alias("piid"),
+    col("ns0:content.ns1:award.ns1:awardID.ns1:awardContractID.ns1:agencyID._value").alias("agency_id"),
+    col("ns0:content.ns1:award.ns1:awardID.ns1:awardContractID.ns1:agencyID._name").alias("agency_name"),
+    col("ns0:content.ns1:award.ns1:awardID.ns1:awardContractID.ns1:modNumber").alias("mod_number"),
+    col("ns0:content.ns1:award.ns1:awardID.ns1:awardContractID.ns1:transactionNumber").alias("transaction_number"),
+    
+    # Solicitation Information
+    col("ns0:content.ns1:award.ns1:contractData.ns1:solicitationID").alias("solicitation_id"),
+    
+    # Dates
+    col("ns0:content.ns1:award.ns1:relevantContractDates.ns1:signedDate").alias("signed_date"),
+    col("ns0:content.ns1:award.ns1:relevantContractDates.ns1:effectiveDate").alias("effective_date"),
+    col("ns0:content.ns1:award.ns1:relevantContractDates.ns1:currentCompletionDate").alias("current_completion_date"),
+    col("ns0:content.ns1:award.ns1:relevantContractDates.ns1:ultimateCompletionDate").alias("ultimate_completion_date"),
+    col("ns0:content.ns1:award.ns1:relevantContractDates.ns1:lastDateToOrder").alias("last_date_to_order"),
+    
+    # Financial Values
+    col("ns0:content.ns1:award.ns1:dollarValues.ns1:baseAndAllOptionsValue").alias("base_and_all_options_value"),
+    col("ns0:content.ns1:award.ns1:dollarValues.ns1:baseAndExercisedOptionsValue").alias("base_and_exercised_options_value"),
+    col("ns0:content.ns1:award.ns1:dollarValues.ns1:obligatedAmount").alias("obligated_amount"),
+    col("ns0:content.ns1:award.ns1:totalDollarValues.ns1:totalBaseAndAllOptionsValue").alias("total_base_and_all_options_value"),
+    col("ns0:content.ns1:award.ns1:totalDollarValues.ns1:totalBaseAndExercisedOptionsValue").alias("total_base_and_exercised_options_value"),
+    col("ns0:content.ns1:award.ns1:totalDollarValues.ns1:totalObligatedAmount").alias("total_obligated_amount"),
 
-```python
-# First fix the minority owned field in the selection
-# In the processed_df definition, change this line:
-col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:minorityOwned.ns1:isMinorityOwned").alias("is_minority_owned"),
+    # Office Information
+    col("ns0:content.ns1:award.ns1:purchaserInformation.ns1:contractingOfficeAgencyID._value").alias("contracting_office_agency_id"),
+    col("ns0:content.ns1:award.ns1:purchaserInformation.ns1:contractingOfficeID._value").alias("contracting_office_id"),
+    col("ns0:content.ns1:award.ns1:purchaserInformation.ns1:fundingRequestingAgencyID._value").alias("funding_requesting_agency_id"),
+    col("ns0:content.ns1:award.ns1:purchaserInformation.ns1:fundingRequestingOfficeID._value").alias("funding_requesting_office_id"),
+    
+    # Foreign Funding
+    col("ns0:content.ns1:award.ns1:purchaserInformation.ns1:foreignFunding._value").alias("foreign_funding")
+)
 
-# ... then add the row count after the cleaning
-# Get row and column counts
-num_rows = cleaned_df.count()
-num_cols = len(cleaned_df.columns)
-print(f"Number of rows: {num_rows}")
-print(f"Number of columns: {num_cols}")
-
-# Display first 100 rows
-display(cleaned_df.head(100))
-```
-
-The key change is in the path to the minority owned field - we need to use `minorityOwned` instead of `isMinorityOwned` in the path. This should resolve the field error you're seeing.
-
-Would you like me to show the complete updated code with this fix?
+print("First part of fields added. Would you like to see the second part focused on contract details and vendor information?")
