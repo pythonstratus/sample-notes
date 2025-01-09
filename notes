@@ -1,11 +1,1 @@
-# For street address
-coalesce(
-    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorLocation.ns1:streetAddress"),
-    lit("")
-).cast("string").alias("street_address"),
-
-# For street address 2
-coalesce(
-    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorLocation.ns1:streetAddress2"),
-    lit("")
-).cast("string").alias("street_address2")
+col("ns0:content.ns1:award.ns1:genericTags.ns1:genericStrings.ns1:genericString01").cast("string").alias("source_selection_process")
