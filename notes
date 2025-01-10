@@ -1,21 +1,11 @@
--- Method 1: Using string_agg
-SELECT string_agg(column_name, ', ' ORDER BY ordinal_position)
-FROM information_schema.columns
-WHERE table_name = 'your_materialized_view_name';
+# For agencyIdentifier
+coalesce(
+    col("ns0:content.ns1:IDV.ns1:contractData.ns1:listOfTreasuryAccounts.ns1:treasuryAccount.ns1:treasuryAccountSymbol.ns1:agencyIdentifier"),
+    lit("")
+).cast("string").alias("agency_identifier"),
 
--- Method 2: Using pg_get_cols (this includes data types)
-SELECT string_agg(col, ', ')
-FROM (
-    SELECT format('%I %s', attname, format_type(atttypid, atttypmod)) as col
-    FROM pg_attribute
-    WHERE attrelid = 'your_materialized_view_name'::regclass
-    AND attnum > 0
-    AND NOT attisdropped
-    ORDER BY attnum
-) t;
-
--- Method 3: If you need to specify schema
-SELECT string_agg(column_name, ', ' ORDER BY ordinal_position)
-FROM information_schema.columns
-WHERE table_schema = 'your_schema_name'
-AND table_name = 'your_materialized_view_name';
+# For CCRException
+coalesce(
+    col("ns0:content.ns1:IDV.ns1:vendor.ns1:CCRException._value"),
+    lit("")
+).cast("string").alias("ccr_exception")
