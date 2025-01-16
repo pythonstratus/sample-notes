@@ -1,21 +1,12 @@
-# Read large XML file using Spark XML reader - Version 2
-contract_df_2 = spark.read \
-    .format("xml") \
-    .option("rootTag", "feed") \
-    .option("rowTag", "ns0:entry") \
-    .option("valueTag", "_value") \
-    .option("attributePrefix", "_") \
-    .load("/Volumes/staging/fpds_raw/landing/fpds_output_2025-01-03.xml")
-
 # Extract and transform the data with ALL mapped fields
-processed_df_2 = contract_df_2.select(
-    # Award ID Information
+processed_df = contract_df.select(
+    # Basic Contract Information from awardID
     col("ns0:content.ns1:award.ns1:awardID.ns1:awardContractID.ns1:PIID").cast("string").alias("piid"),
     col("ns0:content.ns1:award.ns1:awardID.ns1:awardContractID.ns1:modNumber").cast("string").alias("mod_number"),
     col("ns0:content.ns1:award.ns1:awardID.ns1:awardContractID.ns1:transactionNumber").cast("string").alias("transaction_number"),
     
     # Contract Data Fields
-    col("ns0:content.ns1:award.ns1:claimantProgramCode").cast("string").alias("claimant_program_code"),
+    col("ns0:content.ns1:award.ns1:contractData.ns1:claimantProgramCode").cast("string").alias("claimant_program_code"),
     col("ns0:content.ns1:award.ns1:placeOfPerformance.ns1:placeOfPerformanceCongressionalDistrict").cast("long").alias("congressional_district_code"),
     col("ns0:content.ns1:award.ns1:contractData.ns1:contingencyHumanitarianPeacekeepingOperation._value").cast("string").alias("contingency_humanitarian_peacekeeping_operation"),
     col("ns0:content.ns1:award.ns1:productOrServiceInformation.ns1:contractBundling._value").cast("string").alias("contract_bundling"),
@@ -27,6 +18,48 @@ processed_df_2 = contract_df_2.select(
     col("ns0:content.ns1:award.ns1:contractMarketingData.ns1:feePaidForUseOfService").cast("double").alias("fee_paid_for_use_of_service"),
     col("ns0:content.ns1:award.ns1:competition.ns1:idvNumberOfOffersReceived").cast("long").alias("idv_number_of_offers_received"),
     col("ns0:content.ns1:award.ns1:productOrServiceInformation.ns1:informationTechnologyCommercialItemCategory._value").cast("string").alias("information_technology_commercial_item_category"),
-    
-    # Would you like me to continue with the rest of the fields? I'll make sure to include all 100 columns exactly as they appear in your list.
-)
+    col("ns0:content.ns1:award.ns1:contractData.ns1:listOfTreasuryAccounts.ns1:treasuryAccount.ns1:initiative._value").cast("string").alias("initiative"),
+
+    # Vendor Site Details - Socio Economic Indicators
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:isAlaskanNativeOwnedCorporationOrFirm").cast("boolean").alias("is_alaskan_native_owned_corporation_or_firm"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:typeOfEducationalEntity.ns1:isAlaskanNativeServicingInstitution").cast("boolean").alias("is_alaskan_native_servicing_institution"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:isAmericanIndianOwned").cast("boolean").alias("is_american_indian_owned"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:minorityOwned.ns1:isAsianPacificAmericanOwnedBusiness").cast("boolean").alias("is_asian_pacific_american_owned_business"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:minorityOwned.ns1:isBlackAmericanOwnedBusiness").cast("boolean").alias("is_black_american_owned_business"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:localGovernment.ns1:isCityLocalGovernment").cast("boolean").alias("is_city_local_government"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:isCommunityDevelopedCorporationOwnedFirm").cast("boolean").alias("is_community_developed_corporation_owned_firm"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorLineOfBusiness.ns1:isCommunityDevelopmentCorporation").cast("boolean").alias("is_community_development_corporation"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:localGovernment.ns1:isCountyLocalGovernment").cast("boolean").alias("is_county_local_government"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorLineOfBusiness.ns1:isDomesticShelter").cast("boolean").alias("is_domestic_shelter"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorCertifications.ns1:isDOTCertifiedDisadvantagedBusinessEnterprise").cast("boolean").alias("is_dot_certified_disadvantaged_business_enterprise"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:isEconomicallyDisadvantagedWomenOwnedSmallBusiness").cast("boolean").alias("is_economically_disadvantaged_women_owned_small_business"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorLineOfBusiness.ns1:isEducationalInstitution").cast("boolean").alias("is_educational_institution"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:federalGovernment.ns1:isFederalGovernment").cast("boolean").alias("is_federal_government"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:federalGovernment.ns1:isFederalGovernmentAgency").cast("boolean").alias("is_federal_government_agency"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:federalGovernment.ns1:isFederallyFundedResearchAndDevelopmentCorp").cast("boolean").alias("is_federally_funded_research_and_development_corp"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorOrganizationFactors.ns1:profitStructure.ns1:isForProfitOrganization").cast("boolean").alias("is_for_profit_organization"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:isForeignGovernment").cast("boolean").alias("is_foreign_government"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorOrganizationFactors.ns1:isForeignOwnedAndLocated").cast("boolean").alias("is_foreign_owned_and_located"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:minorityOwned.ns1:isHispanicAmericanOwnedBusiness").cast("boolean").alias("is_hispanic_american_owned_business"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorLineOfBusiness.ns1:isHispanicServicingInstitution").cast("boolean").alias("is_hispanic_servicing_institution"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:typeOfEducationalEntity.ns1:isHistoricallyBlackCollegeOrUniversity").cast("boolean").alias("is_historically_black_college_or_university"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:typeOfGovernmentEntity.ns1:isHousingAuthoritiesPublicOrTribal").cast("boolean").alias("is_housing_authorities_public_or_tribal"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:isIndianTribe").cast("boolean").alias("is_indian_tribe"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:localGovernment.ns1:isInterMunicipalLocalGovernment").cast("boolean").alias("is_inter_municipal_local_government"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:typeOfGovernmentEntity.ns1:isInterstateEntity").cast("boolean").alias("is_interstate_entity"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:businessOrOrganizationType.ns1:isInternationalOrganization").cast("boolean").alias("is_international_organization"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:isJointVentureEconomicallyDisadvantagedWomenOwnedSmallBusiness").cast("boolean").alias("is_joint_venture_economically_disadvantaged_women_owned_small_business"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:isJointVentureWomenOwnedSmallBusiness").cast("boolean").alias("is_joint_venture_women_owned_small_business"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:localGovernment.ns1:isLocalGovernment").cast("boolean").alias("is_local_government"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:localGovernment.ns1:isLocalGovernmentOwned").cast("boolean").alias("is_local_government_owned"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:localGovernment.ns1:isMunicipalityLocalGovernment").cast("boolean").alias("is_municipality_local_government"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:minorityOwned.ns1:isNativeAmericanOwnedBusiness").cast("boolean").alias("is_native_american_owned_business"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:isNativeHawaiianOwnedOrganizationOrFirm").cast("boolean").alias("is_native_hawaiian_owned_organization_or_firm"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:typeOfEducationalEntity.ns1:isNativeHawaiianServicingInstitution").cast("boolean").alias("is_native_hawaiian_servicing_institution"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorOrganizationFactors.ns1:profitStructure.ns1:isNonprofitOrganization").cast("boolean").alias("is_nonprofit_organization"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:minorityOwned.ns1:isOtherMinorityOwned").cast("boolean").alias("is_other_minority_owned"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorOrganizationFactors.ns1:profitStructure.ns1:isOtherNotForProfitOrganization").cast("boolean").alias("is_other_not_for_profit_organization"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:businessOrOrganizationType.ns1:isPartnershipOrLimitedLiabilityPartnership").cast("boolean").alias("is_partnership_or_limited_liability_partnership"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:typeOfEducationalEntity.ns1:isPrivateUniversityOrCollege").cast("boolean").alias("is_private_university_or_college"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorCertifications.ns1:isSBACertified8AJointVenture").cast("boolean").alias("is_sba_certified_8a_joint_venture"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorCertifications.ns1:i
