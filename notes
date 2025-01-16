@@ -25,6 +25,29 @@ processed_df_2 = contract_df_2.select(
     col("ns0:content.ns1:award.ns1:contractMarketingData.ns1:feePaidForUseOfService").cast("double").alias("fee_paid_for_use_of_service"),
     col("ns0:content.ns1:award.ns1:competition.ns1:idvNumberOfOffersReceived").cast("long").alias("idv_number_of_offers_received"),
     col("ns0:content.ns1:award.ns1:productOrServiceInformation.ns1:informationTechnologyCommercialItemCategory._value").cast("string").alias("information_technology_commercial_item_category"),
+    # Initiative and Treasury Information (verified in schema)
+    col("ns0:content.ns1:award.ns1:contractData.ns1:listOfTreasuryAccounts.ns1:treasuryAccount.ns1:initiative._value").cast("string").alias("initiative"),
     
-    # Would you like me to continue with the remaining fields? I will check each one carefully against the schema before including it.
+    # Vendor Site Details - Socio Economic Indicators (verified in schema)
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:isAlaskanNativeOwnedCorporationOrFirm").cast("boolean").alias("is_alaskan_native_owned_corporation_or_firm"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:typeOfEducationalEntity.ns1:isAlaskanNativeServicingInstitution").cast("boolean").alias("is_alaskan_native_servicing_institution"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:isAmericanIndianOwned").cast("boolean").alias("is_american_indian_owned"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:minorityOwned.ns1:isAsianPacificAmericanOwnedBusiness").cast("boolean").alias("is_asian_pacific_american_owned_business"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:minorityOwned.ns1:isBlackAmericanOwnedBusiness").cast("boolean").alias("is_black_american_owned_business"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:localGovernment.ns1:isCityLocalGovernment").cast("boolean").alias("is_city_local_government"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:isCommunityDevelopedCorporationOwnedFirm").cast("boolean").alias("is_community_developed_corporation_owned_firm"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorLineOfBusiness.ns1:isCommunityDevelopmentCorporation").cast("boolean").alias("is_community_development_corporation"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:localGovernment.ns1:isCountyLocalGovernment").cast("boolean").alias("is_county_local_government"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorLineOfBusiness.ns1:isDomesticShelter").cast("boolean").alias("is_domestic_shelter"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorCertifications.ns1:isDOTCertifiedDisadvantagedBusinessEnterprise").cast("boolean").alias("is_dot_certified_disadvantaged_business_enterprise"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:isEconomicallyDisadvantagedWomenOwnedSmallBusiness").cast("boolean").alias("is_economically_disadvantaged_women_owned_small_business"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorLineOfBusiness.ns1:isEducationalInstitution").cast("boolean").alias("is_educational_institution"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:federalGovernment.ns1:isFederalGovernment").cast("boolean").alias("is_federal_government"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:federalGovernment.ns1:isFederalGovernmentAgency").cast("boolean").alias("is_federal_government_agency"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:federalGovernment.ns1:isFederallyFundedResearchAndDevelopmentCorp").cast("boolean").alias("is_federally_funded_research_and_development_corp"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorOrganizationFactors.ns1:profitStructure.ns1:isForProfitOrganization").cast("boolean").alias("is_for_profit_organization"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorBusinessTypes.ns1:isForeignGovernment").cast("boolean").alias("is_foreign_government"),
+    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorOrganizationFactors.ns1:isForeignOwnedAndLocated").cast("boolean").alias("is_foreign_owned_and_located"),
+
+    # Would you like me to continue with the remaining verified fields? I'm checking each one carefully against the schema.
 )
