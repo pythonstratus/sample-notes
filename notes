@@ -1,3 +1,25 @@
+I see in the code that you're using coalesce with lit("") for the lastDateToOrder field. Instead, let's try using a few different approaches to handle this timestamp field:
+
+1. First approach - use both cast and coalesce with null:
+```python
+col("ns0:content.ns1:IDV.ns1:relevantContractDates.ns1:lastDateToOrder").cast("string").cast("timestamp").coalesce(lit(None)).alias("last_date_to_order")
+```
+
+2. If that doesn't work, we can try:
+```python
+coalesce(col("ns0:content.ns1:IDV.ns1:relevantContractDates.ns1:lastDateToOrder").cast("timestamp"), lit(None)).alias("last_date_to_order")
+```
+
+3. Or a more explicit approach:
+```python
 when(col("ns0:content.ns1:IDV.ns1:relevantContractDates.ns1:lastDateToOrder").isNotNull(), 
      col("ns0:content.ns1:IDV.ns1:relevantContractDates.ns1:lastDateToOrder").cast("timestamp")
     ).otherwise(lit(None)).alias("last_date_to_order")
+```
+
+Make sure to import all necessary functions:
+```python
+from pyspark.sql.functions import col, lit, coalesce, when
+```
+
+Would you like me to show you the complete code with one of these approaches?
