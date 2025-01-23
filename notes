@@ -1,51 +1,17 @@
-from pyspark.sql.functions import col, coalesce, lit
+```python
+from pyspark.sql.functions import col, coalesce, lit, when
+
+# Check if claimantProgramCode exists and add conditionally
+claimant_program = when(
+    col("ns0:content.ns1:award.ns1:claimantProgramCode").isNotNull(),
+    col("ns0:content.ns1:award.ns1:claimantProgramCode")
+).alias("claimant_program_code")
 
 selected_fields = (
-    # Basic Fields
-    col("ns0:content.ns1:award.ns1:awardID.ns1:awardContractID.ns1:claimantProgramCode").cast("string").alias("claimant_program_code"),
-    col("ns0:content.ns1:award.ns1:contractData.ns1:contingencyHumanitarianPeacekeepingOperation._description").cast("string").alias("contingency_humanitarian_peace_keeping_operation"),
-    col("ns0:content.ns1:award.ns1:contractData.ns1:contractActionType._description").cast("string").alias("contract_action_type_description"),
-    col("ns0:content.ns1:award.ns1:productOrServiceInformation.ns1:contractBundling._description").cast("string").alias("contract_bundling_description"),
-    
-    # Boolean Fields
-    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:typeOfGovernmentEntity.ns1:isInterstateEntity").cast("boolean").alias("is_inter_state_entity"),
-    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:isJointVentureEconomicallyDisadvantagedWomenOwnedSmallBusiness").cast("boolean").alias("is_joint_venture_econ_disadvantaged_women_owned_small_business"),
-    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorOrganizationFactors.ns1:profitStructure.ns1:isNonprofitOrganization").cast("boolean").alias("is_non_profit_organization"),
-    
-    # Date Field
-    col("ns0:content.ns1:IDV.ns1:relevantContractDates.ns1:lastDateToOrder").cast("timestamp").alias("last_date_to_order"),
-    
-    # Descriptive Fields
-    col("ns0:content.ns1:award.ns1:contractData.ns1:performanceBasedServiceContract._description").cast("string").alias("performance_based_service_contract_description"),
-    col("ns0:content.ns1:award.ns1:productOrServiceInformation.ns1:placeOfManufacture._description").cast("string").alias("place_of_manufacture_description"),
-    
-    # Location Fields
-    col("ns0:content.ns1:award.ns1:placeOfPerformance.ns1:principalPlaceOfPerformance.ns1:city").cast("string").alias("place_of_performance_city"),
-    col("ns0:content.ns1:award.ns1:placeOfPerformance.ns1:placeOfPerformanceZIPCode._county").cast("string").alias("place_of_performance_county"),
-    col("ns0:content.ns1:award.ns1:placeOfPerformance.ns1:principalPlaceOfPerformance.ns1:stateCode._value").cast("string").alias("place_of_performance_state_code"),
-    
-    # NAICS and Other Codes
-    col("ns0:content.ns1:award.ns1:productOrServiceInformation.ns1:principalNAICSCode._description").cast("string").alias("principal_naics_code_description"),
-    
-    # Payment and Contract Details
-    col("ns0:content.ns1:award.ns1:contractData.ns1:purchaseCardAsPaymentMethod._description").cast("string").alias("purchase_card_as_payment_method_description"),
-    col("ns0:content.ns1:award.ns1:contractData.ns1:reasonForModification._description").cast("string").alias("reason_for_modification_description"),
-    col("ns0:content.ns1:award.ns1:competition.ns1:reasonNotCompeted._description").cast("string").alias("reason_not_competed_description"),
-    
-    # Referenced IDVID Fields
-    col("ns0:content.ns1:award.ns1:awardID.ns1:referencedIDVID.ns1:agencyID._value").cast("string").alias("referenced_idvid_agency_id"),
-    col("ns0:content.ns1:award.ns1:awardID.ns1:referencedIDVID.ns1:agencyID._name").cast("string").alias("referenced_idvid_agency_name"),
-    col("ns0:content.ns1:award.ns1:awardID.ns1:referencedIDVID.ns1:modNumber").cast("string").alias("referenced_idvid_mod_number"),
-    col("ns0:content.ns1:award.ns1:awardID.ns1:referencedIDVID.ns1:PIID").cast("string").alias("referenced_idvid_piid"),
-    
-    # Additional Contract Details
-    col("ns0:content.ns1:award.ns1:competition.ns1:solicitationProcedures._description").cast("string").alias("solicitation_procedures_description"),
-    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorLocation.ns1:streetAddress3").cast("string").alias("street_address3"),
-    col("ns0:content.ns1:award.ns1:preferencePrograms.ns1:subcontractPlan._description").cast("string").alias("sub_contract_plan_description"),
-    col("ns0:content.ns1:award.ns1:contractData.ns1:typeOfContractPricing._description").cast("string").alias("type_of_contract_pricing_description"),
-    col("ns0:content.ns1:award.ns1:contractData.ns1:typeOfIDC._description").cast("string").alias("type_of_idc_description"),
-    col("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteCode").cast("string").alias("vendor_site_code")
+    claimant_program,
+    # Rest of your fields...
 )
 
-# Create DataFrame with all fields
-df_transformed = df.select(*selected_fields)
+# Remove None/null fields from selection
+selected_fields = tuple(field for field in selected_fields if field is not None)
+```
