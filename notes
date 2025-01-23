@@ -1,42 +1,37 @@
-import pandas as pd
+from pyspark.sql.functions import col
 
-def compare_csv_columns(file1_path, file2_path):
-    # Read both CSV files
-    df_pg = pd.read_csv(file1_path)
-    df_databricks = pd.read_csv(file2_path)
+# Select and transform the fields
+selected_fields = (
+    # Basic fields
+    col("ns1:content.ns1:award.ns1:A76Action._value").cast("string").alias("a76_action"),
+    col("ns1:content.ns1:award.ns1:agencyIdentifier._value").cast("string").alias("agency_identifier"),
+    col("ns1:content.ns1:award.ns1:CCRException._value").cast("string").alias("ccr_exception"),
+    col("ns1:content.ns1:award.ns1:claimantProgramCode").cast("string").alias("claimant_program_code"),
+    col("ns1:content.ns1:award.ns1:contractData.ns1:contingencyHumanitarianPeacekeepingOperation._value").cast("string").alias("contingency_humanitarian_peacekeeping_operation"),
+    col("ns1:content.ns1:award.ns1:contractMarketingData.ns1:emailAddress").cast("string").alias("email_address"),
     
-    # Get column names from both dataframes
-    pg_columns = set(df_pg.columns)
-    databricks_columns = set(df_databricks.columns)
+    # Boolean indicators
+    col("ns1:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:typeOfGovernmentEntity.ns1:isInterstateEntity").cast("boolean").alias("is_interstate_entity"),
+    col("ns1:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:isJointVentureEconomicallyDisadvantagedWomenOwnedSmallBusiness").cast("boolean").alias("is_joint_venture_economically_disadvantaged_women_owned_small_business"),
+    col("ns1:content.ns1:award.ns1:vendor.ns1:vendorOrganizationFactors.ns1:profitStructure.ns1:isNonprofitOrganization").cast("boolean").alias("is_nonprofit_organization"),
+    col("ns1:content.ns1:award.ns1:vendor.ns1:vendorCertifications.ns1:isSBACertifiedHUBZone").cast("boolean").alias("is_sba_certified_hub_zone"),
+    col("ns1:content.ns1:award.ns1:vendor.ns1:vendorCertifications.ns1:isSelfCertifiedHUBZoneJointVenture").cast("boolean").alias("is_self_certified_hub_zone_joint_venture"),
     
-    # Find missing columns in databricks
-    missing_in_databricks = pg_columns - databricks_columns
+    # Date and time fields
+    col("ns1:content.ns1:award.ns1:relevantContractDates.ns1:lastDateToOrder").cast("timestamp").alias("last_date_to_order"),
     
-    # Print results
-    print("\nColumns present in PostgreSQL but missing in Databricks:")
-    if missing_in_databricks:
-        for col in sorted(missing_in_databricks):
-            print(f"- {col}")
-    else:
-        print("No missing columns found!")
-    
-    # Additional information
-    print(f"\nTotal columns in PostgreSQL: {len(pg_columns)}")
-    print(f"Total columns in Databricks: {len(databricks_columns)}")
-    
-    # Optional: Show columns that exist in Databricks but not in PostgreSQL
-    extra_in_databricks = databricks_columns - pg_columns
-    if extra_in_databricks:
-        print("\nColumns present in Databricks but not in PostgreSQL:")
-        for col in sorted(extra_in_databricks):
-            print(f"- {col}")
+    # Additional fields
+    col("ns1:content.ns1:award.ns1:legislativeMandates.ns1:listOfAdditionalReportingValues").alias("list_of_additional_reporting_values"),
+    col("ns1:content.ns1:award.ns1:vendor.ns1:vendorLocation.ns1:state._value").cast("string").alias("state_code"),
+    col("ns1:content.ns1:award.ns1:vendor.ns1:vendorLocation.ns1:streetAddress3").cast("string").alias("street_address3"),
+    col("ns1:content.ns1:award.ns1:preferencePrograms.ns1:subcontractPlan._value").cast("string").alias("subcontract_plan"),
+    col("ns1:content.ns1:award.ns1:contractMarketingData.ns1:typeOfFeeForUseOfService._value").cast("string").alias("type_of_fee_for_use_of_service"),
+    col("ns1:content.ns1:award.ns1:contractData.ns1:typeOfIDC._value").cast("string").alias("type_of_idc"),
+    col("ns1:content.ns1:award.ns1:productOrServiceInformation.ns1:useOfEPADesignatedProducts._value").cast("string").alias("use_of_epa_designated_products"),
+    col("ns1:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorAlternateSiteCode").cast("string").alias("vendor_alternate_site_code"),
+    col("ns1:content.ns1:award.ns1:vendor.ns1:vendorSiteCode").cast("string").alias("vendor_site_code"),
+    col("ns1:content.ns1:award.ns1:contractMarketingData.ns1:whoCanUse").cast("string").alias("who_can_use")
+)
 
-if __name__ == "__main__":
-    # Replace these with your actual file paths
-    pg_file = "fpds_pg.csv"
-    databricks_file = "fpds_databricks.csv"
-    
-    try:
-        compare_csv_columns(pg_file, databricks_file)
-    except Exception as e:
-        print(f"An error occurred: {str(e)}")
+# Apply the selections to your DataFrame
+df_transformed = df.select(*selected_fields)
