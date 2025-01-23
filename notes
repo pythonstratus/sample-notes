@@ -1,4 +1,5 @@
 from pyspark.sql.functions import col, lit
+from pyspark.sql.types import StringType
 
 def get_safe_columns(df, column_paths):
     available_columns = set(df.columns)
@@ -7,11 +8,12 @@ def get_safe_columns(df, column_paths):
     for col_path, alias_name in column_paths:
         try:
             if df.select(col_path).columns[0] in available_columns:
-                safe_cols.append(col(col_path).cast("string").alias(alias_name))
+                # Explicitly cast to StringType()
+                safe_cols.append(col(col_path).cast(StringType()).alias(alias_name))
             else:
-                safe_cols.append(lit(None).cast("string").alias(alias_name))
+                safe_cols.append(lit(None).cast(StringType()).alias(alias_name))
         except:
-            safe_cols.append(lit(None).cast("string").alias(alias_name))
+            safe_cols.append(lit(None).cast(StringType()).alias(alias_name))
     
     return safe_cols
 
@@ -27,4 +29,21 @@ column_paths = [
     ("ns0:content.ns1:award.ns1:productOrServiceInformation.ns1:informationTechnologyCommercialItemCategory", "it_commercial_category")
 ]
 
-processed_df_2 = contract_df_2.select(get_safe_columns(contract_df_2, column_paths))
+# Read the XML file
+contract_df_3 = spark.read \
+    .format("xml") \
+    .option("rootTag", "feed") \
+    .option("rowTag", "ns0:entry") \
+    .option("valueTag", "_value") \
+    .option("attributePrefix", "_") \
+    .option("mode", "PERMISSIVE") \
+    .load("/Volumes/staging/fpds_raw/landing/fpds_output_2025-01-03.xml")
+
+# Cache the dataframe to improve performance
+contract_df_3.cache()
+
+# Process the dataframe with explicit schema casting
+processed_df_3 = contract_df_3.select(get_safe_columns(contract_df_3, column_paths))
+
+# Show the results
+display(processed_df_3.head(100))
