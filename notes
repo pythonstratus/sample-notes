@@ -1,5 +1,14 @@
-# Contract type from contractData
-contract_type = col("ns0:content.ns1:award.ns1:contractData.ns1:contractActionType._value").cast("string").alias("contract_type")
+from pyspark.sql.functions import col, when, lit
+
+contract_type = when(
+    col("ns0:content.ns1:award.ns1:awardID.ns1:awardContractID").isNotNull(), 
+    lit("Award")
+).otherwise(
+    when(
+        col("ns0:content.ns1:IDV").isNotNull(),
+        lit("IDV")
+    )
+).alias("contract_type")
 
 # Add to selected fields 
 selected_fields = selected_fields + (contract_type,)
