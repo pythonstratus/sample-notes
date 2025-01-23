@@ -47,3 +47,50 @@ processed_df_3 = contract_df_3.select(get_safe_columns(contract_df_3, column_pat
 
 # Show the results
 display(processed_df_3.head(100))
+
+
+
+
+
+
+
+
+from pyspark.sql.functions import col, lit
+from pyspark.sql.types import StringType
+
+def get_safe_columns(df, column_paths):
+    safe_cols = []
+    
+    for col_path, alias_name in column_paths:
+        try:
+            # First just select without casting
+            df.select(col_path)
+            safe_cols.append(col(col_path).alias(alias_name))
+        except:
+            safe_cols.append(lit(None).alias(alias_name))
+    
+    return safe_cols
+
+# Try with just one column first to test
+column_paths = [
+    ("ns0:content.ns1:award.ns1:contractData.ns1:contingencyHumanitarianPeacekeepingOperation._description", "contingency_humanitarian_peace_keeping_operation")
+]
+
+# Read the XML file
+contract_df_3 = spark.read \
+    .format("xml") \
+    .option("rootTag", "feed") \
+    .option("rowTag", "ns0:entry") \
+    .option("valueTag", "_value") \
+    .option("attributePrefix", "_") \
+    .option("mode", "PERMISSIVE") \
+    .load("/Volumes/staging/fpds_raw/landing/fpds_output_2025-01-03.xml")
+
+# First get the raw columns
+raw_df = contract_df_3.select(get_safe_columns(contract_df_3, column_paths))
+
+# Then cast everything to string
+processed_df_3 = raw_df.select([col(c).cast("string") for c in raw_df.columns])
+
+# Show the results
+display(processed_df_3.head(100))
