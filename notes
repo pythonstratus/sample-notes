@@ -1,22 +1,5 @@
-from pyspark.sql.functions import col, concat, coalesce, lit
+# Contract type from contractData
+contract_type = col("ns0:content.ns1:award.ns1:contractData.ns1:contractActionType._value").cast("string").alias("contract_type")
 
-# First, let's create referenced_idvid_piid
-referenced_idvid_piid = col("ns0:content.ns1:award.ns1:awardID.ns1:referencedIDVID.ns1:PIID")
-
-# Create PIID field
-piid = col("ns0:content.ns1:award.ns1:awardID.ns1:awardContractID.ns1:PIID")
-
-# Create mod_number field
-mod_number = col("ns0:content.ns1:award.ns1:awardID.ns1:awardContractID.ns1:modNumber")
-
-# Now construct the contract_id following the SQL pattern
-contract_id = concat(
-    coalesce(referenced_idvid_piid, lit("")), 
-    lit("||"), 
-    coalesce(piid, lit("")), 
-    lit("||"), 
-    coalesce(mod_number, lit(""))
-).alias("id_create")
-
-# Add this to your selected fields
-selected_fields = selected_fields + (contract_id,)
+# Add to selected fields 
+selected_fields = selected_fields + (contract_type,)
