@@ -1,65 +1,30 @@
-```python
-from pyspark.sql.functions import col, coalesce, lit, when
+from pyspark.sql.functions import col, lit
 
-# Check if claimantProgramCode exists and add conditionally
-claimant_program = when(
-    col("ns0:content.ns1:award.ns1:claimantProgramCode").isNotNull(),
-    col("ns0:content.ns1:award.ns1:claimantProgramCode")
-).alias("claimant_program_code")
+def get_safe_columns(df, column_paths):
+    available_columns = set(df.columns)
+    safe_cols = []
+    
+    for col_path, alias_name in column_paths:
+        try:
+            if df.select(col_path).columns[0] in available_columns:
+                safe_cols.append(col(col_path).cast("string").alias(alias_name))
+            else:
+                safe_cols.append(lit(None).cast("string").alias(alias_name))
+        except:
+            safe_cols.append(lit(None).cast("string").alias(alias_name))
+    
+    return safe_cols
 
-selected_fields = (
-    claimant_program,
-    # Rest of your fields...
-)
+column_paths = [
+    ("ns0:content.ns1:award.ns1:placeOfPerformance.ns1:placeOfPerformanceCongressionalDistrict", "congressional_district"),
+    ("ns0:content.ns1:award.ns1:contractData.ns1:contingencyHumanitarianPeacekeepingOperation._value", "peace_keeping_op"),
+    ("ns0:content.ns1:award.ns1:productOrServiceInformation.ns1:contractBundling._value", "contract_bundling"),
+    ("ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorOrganizationFactors.ns1:countryOfIncorporation", "country_of_incorporation"),
+    ("ns0:content.ns1:award.ns1:relevantContractDates.ns1:currentCompletionDate", "completion_date"),
+    ("ns0:content.ns1:award.ns1:competition.ns1:fedBizOpps._value", "fed_biz_opps"),
+    ("ns0:content.ns1:award.ns1:contractMarketingData.ns1:feePaidForUseOfService", "fee_paid"),
+    ("ns0:content.ns1:award.ns1:competition.ns1:idvNumberOfOffersReceived", "idv_number_of_offers"),
+    ("ns0:content.ns1:award.ns1:productOrServiceInformation.ns1:informationTechnologyCommercialItemCategory", "it_commercial_category")
+]
 
-# Remove None/null fields from selection
-selected_fields = tuple(field for field in selected_fields if field is not None)
-```
-
-
-from pyspark.sql.functions import col, coalesce, lit, when
-
-selected_fields = []
-
-# Field checks and additions
-fields = {
-   "contingency_humanitarian_peace_keeping_operation": "ns0:content.ns1:award.ns1:contractData.ns1:contingencyHumanitarianPeacekeepingOperation._description",
-   "contract_action_type_description": "ns0:content.ns1:award.ns1:contractData.ns1:contractActionType._description",
-   "contract_bundling_description": "ns0:content.ns1:award.ns1:productOrServiceInformation.ns1:contractBundling._description",
-   "is_inter_state_entity": "ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:typeOfGovernmentEntity.ns1:isInterstateEntity",
-   "is_joint_venture_econ_disadvantaged_women_owned_small_business": "ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteDetails.ns1:vendorSocioEconomicIndicators.ns1:isJointVentureEconomicallyDisadvantagedWomenOwnedSmallBusiness",
-   "is_non_profit_organization": "ns0:content.ns1:award.ns1:vendor.ns1:vendorOrganizationFactors.ns1:profitStructure.ns1:isNonprofitOrganization",
-   "last_date_to_order": "ns0:content.ns1:IDV.ns1:relevantContractDates.ns1:lastDateToOrder",
-   "performance_based_service_contract_description": "ns0:content.ns1:award.ns1:contractData.ns1:performanceBasedServiceContract._description",
-   "place_of_manufacture_description": "ns0:content.ns1:award.ns1:productOrServiceInformation.ns1:placeOfManufacture._description",
-   "place_of_performance_city": "ns0:content.ns1:award.ns1:placeOfPerformance.ns1:principalPlaceOfPerformance.ns1:city",
-   "place_of_performance_county": "ns0:content.ns1:award.ns1:placeOfPerformance.ns1:placeOfPerformanceZIPCode._county",
-   "place_of_performance_state_code": "ns0:content.ns1:award.ns1:placeOfPerformance.ns1:principalPlaceOfPerformance.ns1:stateCode._value",
-   "principal_naics_code_description": "ns0:content.ns1:award.ns1:productOrServiceInformation.ns1:principalNAICSCode._description",
-   "purchase_card_as_payment_method_description": "ns0:content.ns1:award.ns1:contractData.ns1:purchaseCardAsPaymentMethod._description",
-   "reason_for_modification_description": "ns0:content.ns1:award.ns1:contractData.ns1:reasonForModification._description",
-   "reason_not_competed_description": "ns0:content.ns1:award.ns1:competition.ns1:reasonNotCompeted._description",
-   "referenced_idvid_agency_id": "ns0:content.ns1:award.ns1:awardID.ns1:referencedIDVID.ns1:agencyID._value",
-   "referenced_idvid_agency_name": "ns0:content.ns1:award.ns1:awardID.ns1:referencedIDVID.ns1:agencyID._name",
-   "referenced_idvid_mod_number": "ns0:content.ns1:award.ns1:awardID.ns1:referencedIDVID.ns1:modNumber",
-   "referenced_idvid_piid": "ns0:content.ns1:award.ns1:awardID.ns1:referencedIDVID.ns1:PIID",
-   "solicitation_procedures_description": "ns0:content.ns1:award.ns1:competition.ns1:solicitationProcedures._description",
-   "street_address3": "ns0:content.ns1:award.ns1:vendor.ns1:vendorLocation.ns1:streetAddress3",
-   "sub_contract_plan_description": "ns0:content.ns1:award.ns1:preferencePrograms.ns1:subcontractPlan._description",
-   "type_of_contract_pricing_description": "ns0:content.ns1:award.ns1:contractData.ns1:typeOfContractPricing._description",
-   "type_of_idc_description": "ns0:content.ns1:award.ns1:contractData.ns1:typeOfIDC._description",
-   "vendor_site_code": "ns0:content.ns1:award.ns1:vendor.ns1:vendorSiteCode"
-}
-
-for alias, path in fields.items():
-   field = when(
-       col(path).isNotNull(),
-       col(path)
-   ).alias(alias)
-   selected_fields.append(field)
-
-# Convert list to tuple for select statement
-selected_fields = tuple(selected_fields)
-
-# Create DataFrame with all fields
-df_transformed = df.select(*selected_fields)
+processed_df_2 = contract_df_2.select(get_safe_columns(contract_df_2, column_paths))
