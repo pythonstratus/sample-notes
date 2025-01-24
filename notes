@@ -1,42 +1,66 @@
 from pyspark.sql.functions import current_timestamp, lit, count
 from datetime import datetime
 
-# Get metadata information
-file_name = "fpds_output_2025-01-03.xml"
-file_path = "/Volumes/staging/fpds_raw/landing/fpds_output_2025-01-03.xml"
-num_rows = processed_df_3.count()
-num_columns = len(processed_df_3.columns)
-process_date = current_timestamp()
-file_type = "XML"
-file_process_state = "COMPLETED"
+# Create widgets for parameterization
+dbutils.widgets.text("file_name", "", "File Name")
+dbutils.widgets.text("file_path", "/Volumes/staging/fpds_raw/landing/", "File Path")
+dbutils.widgets.text("table_name", "staging.fpds_raw.source_metadata", "Target Table")
 
-# Create metadata dataframe
-metadata_df = spark.createDataFrame([
-    (
-        file_name,
-        file_path,
-        num_rows,
-        num_columns,
-        process_date,
-        file_type,
-        file_process_state
-    )
-], [
-    "file_name",
-    "file_path",
-    "number_of_rows_ingested",
-    "number_of_columns",
-    "process_date",
-    "file_type",
-    "file_process_state"
-])
+def create_file_metadata(spark, result_df):
+    # Get widget values
+    file_name = dbutils.widgets.get("file_name")
+    file_path = dbutils.widgets.get("file_path")
+    table_name = dbutils.widgets.get("table_name")
+    
+    # Get metadata information
+    num_rows = result_df.count()
+    num_columns = len(result_df.columns)
+    process_date = current_timestamp()
+    file_type = "XML"
+    file_process_state = "COMPLETED"
+    
+    # Create metadata dataframe
+    metadata_df = spark.createDataFrame([
+        (
+            file_name,
+            file_path,
+            num_rows,
+            num_columns,
+            process_date,
+            file_type,
+            file_process_state
+        )
+    ], [
+        "file_name",
+        "file_path",
+        "number_of_rows_ingested",
+        "number_of_columns",
+        "process_date",
+        "file_type",
+        "file_process_state"
+    ])
+    
+    # Write metadata to table
+    metadata_df.write \
+        .format("delta") \
+        .mode("append") \
+        .saveAsTable(table_name)
+    
+    # Verify the metadata was written
+    verification_df = spark.sql(f"SELECT * FROM {table_name} ORDER BY process_date DESC")
+    display(verification_df)
+    
+    return metadata_df
 
-# Write metadata to table
-metadata_df.write \
-    .format("delta") \
-    .mode("append") \
-    .saveAsTable("source_metadata")
+# Usage example:
+# First set widget values programmatically if needed
+dbutils.widgets.remove("file_name")
+dbutils.widgets.remove("file_path")
+dbutils.widgets.remove("table_name")
 
-# Verify the metadata was written
-verification_df = spark.sql("SELECT * FROM source_metadata ORDER BY process_date DESC")
-display(verification_df)
+dbutils.widgets.text("file_name", "fpds_output_2025-01-03.xml")
+dbutils.widgets.text("file_path", "/Volumes/staging/fpds_raw/landing/fpds_output_2025-01-03.xml")
+dbutils.widgets.text("table_name", "staging.fpds_raw.source_metadata")
+
+# Then call the function
+metadata_df = create_file_metadata(spark, result_df)
