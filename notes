@@ -1,3 +1,4 @@
+# COMMAND ----------
 # Create or replace temp view with latest data
 spark.sql("""
     CREATE OR REPLACE TEMPORARY VIEW latest_contract_data AS
@@ -10,12 +11,14 @@ spark.sql("""
     ON contract_data.insert_date = latest_date.max
 """)
 
+# COMMAND ----------
 # Write the data to fpds schema
 spark.sql("""
     CREATE TABLE IF NOT EXISTS fpds.contract_data
     AS SELECT * FROM latest_contract_data
 """)
 
+# COMMAND ----------
 # Set owner if needed
 spark.sql("""
     ALTER TABLE IF EXISTS fpds.contract_data
