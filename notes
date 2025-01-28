@@ -5,13 +5,13 @@ import glob
 def get_latest_xml_file_path(base_path="/Volumes/staging/fpds_raw/landing/raw"):
     """
     Returns the path to the latest XML file in the specified directory structure.
-    The function looks for files matching the fpds_output_{date}.xml pattern.
     
     Args:
         base_path (str): Base directory path to search in
     
     Returns:
-        str: Full path to the latest XML file
+        str: Full path to the latest XML file, formatted as 
+             /Volumes/staging/fpds_raw/landing/fpds_output_{date}.xml
     """
     # Get current year and month
     current_date = datetime.now()
@@ -21,12 +21,23 @@ def get_latest_xml_file_path(base_path="/Volumes/staging/fpds_raw/landing/raw"):
     search_path = os.path.join(base_path, year_month)
     
     # Get list of all XML files in the directory
-    xml_pattern = os.path.join(search_path, f"fpds_output_*.xml")
+    xml_pattern = os.path.join(search_path, "fpds_output_*.xml")
     xml_files = glob.glob(xml_pattern)
     
     if not xml_files:
         return None
-        
-    # Return the latest file (should be the most recent date in filename)
+    
+    # Get the latest file
     latest_file = max(xml_files)
-    return latest_file
+    
+    # Format the final path to match the expected format
+    final_path = f"/Volumes/staging/fpds_raw/landing/fpds_output_{current_date.strftime('%Y-%m-%d')}.xml"
+    
+    return final_path
+
+# Create widgets for parameterization
+xml_file_path = get_latest_xml_file_path()
+dbutils.widgets.text("file_path", xml_file_path)
+dbutils.widgets.text("table_name", "staging.fpds_raw.contract_data")
+dbutils.widgets.text("source_metadata_table_name", "staging.fpds_raw.source_metadata")
+file_name = os.path.basename(dbutils.widgets.get("file_path"))
