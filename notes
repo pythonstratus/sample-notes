@@ -1,1 +1,29 @@
-dbutils.widgets.text("file_path", f"/Volumes/staging/fpds_raw/landing/fpds_output_{datetime.now().strftime('%Y-%m-%d')}.xml")
+from tqdm.notebook import tqdm
+
+def read_fpds_xml(spark, xml_file_path):
+    stages = ["Reading XML", "Caching data", "Processing fields", "Cleaning data"]
+    
+    with tqdm(total=len(stages), desc="Processing XML") as pbar:
+        contract_df = spark.read \
+            .format("xml") \
+            .option("rootTag", "feed") \
+            .option("rowTag", "ns0:entry") \
+            .option("valueTag", "_value") \
+            .option("attributePrefix", "_") \
+            .load(xml_file_path)
+        pbar.update(1)
+        
+        contract_df.cache()
+        pbar.update(1)
+        
+        processed_df = contract_df.select(
+            # Your existing select operations...
+        )
+        pbar.update(1)
+        
+        cleaned_df = processed_df \
+            .withColumn("signed_date", to_timestamp("signed_date")) \
+            # Rest of your cleaning operations...
+        pbar.update(1)
+        
+    return cleaned_df
