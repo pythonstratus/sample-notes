@@ -2,6 +2,7 @@ from urllib.request import urlopen
 import xml.etree.ElementTree as et
 from datetime import datetime as dt
 import os
+import shutil  # Added this import
 
 # Base paths setup
 BASE_PATH = '/Volumes/staging/fpds'
@@ -54,7 +55,9 @@ def write_data():
     current_date = dt.now()
     folder_path = create_dated_folders(current_date)
     
-    # Create output path just like your original code
+    # Define all the paths like in your original code
+    destination_folder = '/Volumes/staging/fpds_raw/landing/fpds/'
+    destination_folder2 = '/Volumes/staging/fpds_raw/landing/fpds/' + dt.now().strftime("%Y-%m-%d") + '_fpds_output.xml'
     file_output_path = os.path.join(folder_path, 'fpds_output_' + dt.now().strftime("%Y-%m-%d") + '.xml')
     
     # Create output file
@@ -72,6 +75,10 @@ def write_data():
     
     # Close output file
     output_file.close()
+    
+    # Copy files using shutil as in your original code
+    shutil.copy(file_output_path, destination_folder)
+    shutil.copy(file_output_path, destination_folder2)
 
 def main():
     # Set Request Defaults
