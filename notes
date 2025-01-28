@@ -50,14 +50,12 @@ def get_data():
             request_Index = request_Index + request_Increment
 
 def write_data():
-    """Function to write entries to XML file with organized folder structure"""
-    # Get current date for folder creation
+    """Function to write entries to XML file"""
     current_date = dt.now()
     folder_path = create_dated_folders(current_date)
     
-    # Create output filename with date
-    filename = f'fpds_{current_date.strftime("%Y%m%d")}.xml'
-    file_output_path = os.path.join(folder_path, filename)
+    # Create output path just like your original code
+    file_output_path = os.path.join(folder_path, 'fpds_output_' + dt.now().strftime("%Y-%m-%d") + '.xml')
     
     # Create output file
     output_file = open(file_output_path, 'w')
@@ -68,7 +66,7 @@ def write_data():
     # Write each entry to output file
     for entry_XML in get_data():
         output_file.write(entry_XML.decode("utf-8"))
-        
+    
     # Write closing tag
     output_file.write("</feed>")
     
