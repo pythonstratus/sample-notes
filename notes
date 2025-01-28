@@ -33,11 +33,22 @@ def get_data():
                 response_XML = urlopen(request_URL).read()
                 root = et.fromstring(response_XML)
                 print('There was a successful response, batch: {}'.format(request_Index))
-                break
+                break  # This break only exits the inner while loop
             except Exception as e:
                 print('There was an error during response, will try to request batch: {}'.format(request_Index))
                 print(request_URL)
                 continue
+        
+        # Loop through entries in response_XML
+        for entry in root.findall('{http://www.w3.org/2005/Atom}entry'):
+            entry_XML = et.tostring(entry)
+            yield entry_XML
+        
+        # Check loop condition - this controls the increment
+        if root.findall('{http://www.w3.org/2005/Atom}entry') == []:
+            break  # This break exits the outer while loop
+        else:
+            request_Index = request_Index + request_Increment
 
 def write_data():
     """Function to write entries to XML file"""
