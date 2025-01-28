@@ -1,54 +1,20 @@
 from urllib.request import urlopen
 import xml.etree.ElementTree as et
 from datetime import datetime as dt
-import shutil
-import os
 
-# Base paths setup
-BASE_PATH = '/Volumes/staging/fpds'
-RAW_PATH = os.path.join(BASE_PATH, 'raw')
+# Base paths setup - using dbfs path format
+BASE_PATH = '/dbfs/Volumes/staging/fpds'
+RAW_PATH = f'{BASE_PATH}/raw'
 
 def create_dated_folders(date):
     """Create YYYY/MM folder structure and return the path"""
     year = date.strftime('%Y')
     month = date.strftime('%m')
-    folder_path = os.path.join(RAW_PATH, year, month)
-    os.makedirs(folder_path, exist_ok=True)
-    return folder_path
-
-def get_data():
-    """Function to get data from the atom feed and return 10 entries each time"""
-    response_XML = ''
-    request_Index = 0
-    request_Increment = 10
+    folder_path = f"{RAW_PATH}/{year}/{month}"
     
-    while True:
-        # Create request URL string
-        request_URL = request_BaseURL + '%20LAST_MOD_DATE:[' + request_ModifiedDate + ']&start=' + str(request_Index)
-        print(request_URL)
-        
-        while True:
-            try:
-                # Submit request URL and save response
-                response_XML = urlopen(request_URL).read()
-                root = et.fromstring(response_XML)
-                print('There was a successful response, batch: {}'.format(request_Index))
-                break
-            except Exception as e:
-                print('There was an error during response, will try to request batch: {}'.format(request_Index))
-                print(request_URL)
-                continue
-        
-        # Loop through entries in response_XML
-        for entry in root.findall('{http://www.w3.org/2005/Atom}entry'):
-            entry_XML = et.tostring(entry) #, pretty_print=True)
-            yield entry_XML
-        
-        # Check loop condition
-        if root.findall('{http://www.w3.org/2005/Atom}entry') == []:
-            break
-        else:
-            request_Index = request_Index + request_Increment
+    # Use dbutils instead of os.makedirs
+    dbutils.fs.mkdirs(folder_path.replace('/dbfs', ''))
+    return folder_path
 
 def write_data():
     """Function to write entries to XML file with organized folder structure"""
@@ -58,7 +24,7 @@ def write_data():
     
     # Create output filename with date
     filename = f'fpds_{current_date.strftime("%Y%m%d")}.xml'
-    file_output_path = os.path.join(folder_path, filename)
+    file_output_path = f"{folder_path}/{filename}"
     
     # Create output file
     with open(file_output_path, 'w') as output_file:
@@ -77,10 +43,10 @@ def main():
     global request_BaseURL, request_ModifiedDate
     
     request_BaseURL = 'https://www.fpds.gov/dbsight/FEEDS/ATOM?templateName=1.5.3&FEEDNAME=PUBLIC&q=FUNDING_AGENCY_ID:"9555"'
-    request_ModifiedDate = '2019/01/01'
+    request_ModifiedDate = '2010/01/01'
     
     # Create base folders if they don't exist
-    os.makedirs(RAW_PATH, exist_ok=True)
+    dbutils.fs.mkdirs(RAW_PATH.replace('/dbfs', ''))
     
     # Execute main data fetch and write
     write_data()
