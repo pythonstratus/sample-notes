@@ -2,11 +2,6 @@ from urllib.request import urlopen
 import xml.etree.ElementTree as et
 from datetime import datetime as dt
 import os
-import logging
-
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 # Base paths setup
 BASE_PATH = '/Volumes/staging/fpds'
@@ -18,85 +13,76 @@ def create_dated_folders(date):
     month = date.strftime('%m')
     folder_path = os.path.join(RAW_PATH, year, month)
     os.makedirs(folder_path, exist_ok=True)
-    logger.info(f"Created/verified folder path: {folder_path}")
     return folder_path
 
 def get_data():
     """Function to get data from the atom feed and return 10 entries each time"""
-    response_XML = ''
     request_Index = 0
     request_Increment = 10
-    entries_count = 0
     
     while True:
-        # Create request URL string
-        request_URL = request_BaseURL + '%20LAST_MOD_DATE:[' + request_ModifiedDate + ']&start=' + str(request_Index)
-        logger.info(f"Requesting URL: {request_URL}")
-        
         try:
+            # Create request URL string
+            request_URL = request_BaseURL + '%20LAST_MOD_DATE:[' + request_ModifiedDate + ']&start=' + str(request_Index)
+            print(f"Requesting batch {request_Index}...")
+            print(request_URL)
+            
             # Submit request URL and save response
             response_XML = urlopen(request_URL).read()
             root = et.fromstring(response_XML)
-            logger.info(f'Successful response for batch: {request_Index}')
             
-            # Loop through entries in response_XML
-            current_entries = root.findall('{http://www.w3.org/2005/Atom}entry')
-            batch_count = len(current_entries)
-            logger.info(f"Found {batch_count} entries in current batch")
+            # Get entries from current batch
+            entries = root.findall('{http://www.w3.org/2005/Atom}entry')
             
-            for entry in current_entries:
-                entries_count += 1
-                entry_XML = et.tostring(entry)
-                yield entry_XML
-            
-            # Check loop condition
-            if batch_count == 0:
-                logger.info(f"No more entries found. Total processed: {entries_count}")
+            if not entries:  # If no entries found
+                print(f"No more entries found after {request_Index} entries")
                 break
-            else:
-                request_Index = request_Index + request_Increment
                 
+            print(f'Successfully retrieved batch: {request_Index} with {len(entries)} entries')
+            
+            # Yield each entry
+            for entry in entries:
+                yield et.tostring(entry)
+            
+            # Increment for next batch
+            request_Index += request_Increment
+            
         except Exception as e:
-            logger.error(f"Error during request: {str(e)}")
-            logger.error(f"Failed URL: {request_URL}")
+            print(f'Error occurred: {str(e)}')
+            print(f'Failed URL: {request_URL}')
             raise  # Re-raise the exception to stop processing
 
 def write_data():
     """Function to write entries to XML file with organized folder structure"""
+    # Get current date for folder creation
     current_date = dt.now()
     folder_path = create_dated_folders(current_date)
     
+    # Create output filename with date
     filename = f'fpds_{current_date.strftime("%Y%m%d")}.xml'
     file_output_path = os.path.join(folder_path, filename)
-    logger.info(f"Writing to file: {file_output_path}")
     
-    entries_written = 0
-    try:
-        with open(file_output_path, 'w') as output_file:
-            output_file.write("<feed>")
-            
-            for entry_XML in get_data():
-                output_file.write(entry_XML.decode("utf-8"))
-                entries_written += 1
-                
-            output_file.write("</feed>")
+    print(f"Writing to: {file_output_path}")
+    entries_count = 0
+    
+    # Create output file
+    with open(file_output_path, 'w') as output_file:
+        # Write opening tag
+        output_file.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+        output_file.write("<feed>\n")
         
-        logger.info(f"Successfully wrote {entries_written} entries to {file_output_path}")
-        
-        # Verify file exists and has content
-        if os.path.exists(file_output_path):
-            size = os.path.getsize(file_output_path)
-            logger.info(f"Output file size: {size} bytes")
-        else:
-            logger.error("Output file was not created!")
+        # Write each entry to output file
+        for entry_XML in get_data():
+            output_file.write(entry_XML.decode("utf-8") + "\n")
+            entries_count += 1
             
-    except Exception as e:
-        logger.error(f"Error writing data: {str(e)}")
-        raise
+        # Write closing tag
+        output_file.write("</feed>")
+    
+    print(f"Successfully wrote {entries_count} entries to file")
+    return file_output_path
 
 def main():
-    logger.info("Starting FPDS data extraction")
-    
     # Set Request Defaults
     global request_BaseURL, request_ModifiedDate
     
@@ -105,11 +91,10 @@ def main():
     
     # Create base folders if they don't exist
     os.makedirs(RAW_PATH, exist_ok=True)
-    logger.info(f"Base path created/verified: {RAW_PATH}")
     
     # Execute main data fetch and write
-    write_data()
-    logger.info("Completed FPDS data extraction")
+    output_path = write_data()
+    print(f"Process completed. File saved to: {output_path}")
 
 if __name__ == "__main__":
     main()
