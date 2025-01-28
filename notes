@@ -2,9 +2,9 @@ from urllib.request import urlopen
 import xml.etree.ElementTree as et
 from datetime import datetime as dt
 import os
-import shutil  # Added this import
+import shutil
 
-# Base paths setup
+# Base paths setup - using exact paths from your code
 BASE_PATH = '/Volumes/staging/fpds'
 RAW_PATH = os.path.join(BASE_PATH, 'raw')
 
@@ -17,80 +17,62 @@ def create_dated_folders(date):
     return folder_path
 
 def get_data():
-    """Function to get data from the atom feed and return 10 entries each time"""
     response_XML = ''
     request_Index = 0
     request_Increment = 10
     
     while True:
-        # Create request URL string with the comma after the date
         request_URL = request_BaseURL + '%20LAST_MOD_DATE:[' + request_ModifiedDate + '],' + '&start=' + str(request_Index)
         print(request_URL)
         
         while True:
             try:
-                # Submit request URL and save response
                 response_XML = urlopen(request_URL).read()
                 root = et.fromstring(response_XML)
                 print('There was a successful response, batch: {}'.format(request_Index))
-                break  # This break only exits the inner while loop
+                break
             except Exception as e:
                 print('There was an error during response, will try to request batch: {}'.format(request_Index))
                 print(request_URL)
                 continue
         
-        # Loop through entries in response_XML
         for entry in root.findall('{http://www.w3.org/2005/Atom}entry'):
             entry_XML = et.tostring(entry)
             yield entry_XML
         
-        # Check loop condition - this controls the increment
         if root.findall('{http://www.w3.org/2005/Atom}entry') == []:
-            break  # This break exits the outer while loop
+            break
         else:
             request_Index = request_Index + request_Increment
 
 def write_data():
-    """Function to write entries to XML file"""
     current_date = dt.now()
     folder_path = create_dated_folders(current_date)
     
-    # Define paths
     destination_folder = '/Volumes/staging/fpds_raw/landing/fpds/'
-    destination_folder2 = '/Volumes/staging/fpds_raw/landing/fpds/'
+    destination_folder2 = '/Volumes/staging/fpds_raw/landing/fpds/' + dt.now().strftime("%Y-%m-%d") + '_fpds_output.xml'
     file_output_path = os.path.join(folder_path, 'fpds_output_' + dt.now().strftime("%Y-%m-%d") + '.xml')
     
-    # Create output file
     output_file = open(file_output_path, 'w')
-    
-    # Write opening tag
     output_file.write("<feed>")
     
-    # Write each entry to output file
     for entry_XML in get_data():
         output_file.write(entry_XML.decode("utf-8"))
     
-    # Write closing tag
     output_file.write("</feed>")
-    
-    # Close output file
     output_file.close()
     
-    # Copy and move files exactly as in your original code
+    # Correct shutil operations exactly as in your code
     shutil.copy(file_output_path, destination_folder)
-    shutil.move(destination_folder + 'fpds_output.xml', destination_folder2)
+    shutil.copy(file_output_path, destination_folder2)
 
 def main():
-    # Set Request Defaults
     global request_BaseURL, request_ModifiedDate
     
     request_BaseURL = 'https://www.fpds.gov/dbsight/FEEDS/ATOM?templateName=1.5.3&FEEDNAME=PUBLIC&q=FUNDING_AGENCY_ID:"9555"'
     request_ModifiedDate = '2010/01/01'
     
-    # Create base folders if they don't exist
     os.makedirs(RAW_PATH, exist_ok=True)
-    
-    # Execute main data fetch and write
     write_data()
 
 if __name__ == "__main__":
