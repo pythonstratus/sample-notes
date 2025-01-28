@@ -10,8 +10,7 @@ def get_latest_xml_file_path(base_path="/Volumes/staging/fpds_raw/landing/raw"):
         base_path (str): Base directory path to search in
     
     Returns:
-        str: Full path to the latest XML file, formatted as 
-             /Volumes/staging/fpds_raw/landing/fpds_output_{date}.xml
+        str: Full path to the latest XML file found in the directory
     """
     # Get current year and month
     current_date = datetime.now()
@@ -26,14 +25,11 @@ def get_latest_xml_file_path(base_path="/Volumes/staging/fpds_raw/landing/raw"):
     
     if not xml_files:
         return None
-    
+        
     # Get the latest file
     latest_file = max(xml_files)
     
-    # Format the final path to match the expected format
-    final_path = f"/Volumes/staging/fpds_raw/landing/fpds_output_{current_date.strftime('%Y-%m-%d')}.xml"
-    
-    return final_path
+    return latest_file
 
 # Create widgets for parameterization
 xml_file_path = get_latest_xml_file_path()
