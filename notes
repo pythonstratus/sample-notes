@@ -1,29 +1,12 @@
-from tqdm.notebook import tqdm
+# First, create a variable with the formatted path
+xml_file_path = f"/Volumes/staging/fpds_raw/landing/fpds_output_{datetime.now().strftime('%Y-%m-%d')}.xml"
 
-def read_fpds_xml(spark, xml_file_path):
-    stages = ["Reading XML", "Caching data", "Processing fields", "Cleaning data"]
-    
-    with tqdm(total=len(stages), desc="Processing XML") as pbar:
-        contract_df = spark.read \
-            .format("xml") \
-            .option("rootTag", "feed") \
-            .option("rowTag", "ns0:entry") \
-            .option("valueTag", "_value") \
-            .option("attributePrefix", "_") \
-            .load(xml_file_path)
-        pbar.update(1)
-        
-        contract_df.cache()
-        pbar.update(1)
-        
-        processed_df = contract_df.select(
-            # Your existing select operations...
-        )
-        pbar.update(1)
-        
-        cleaned_df = processed_df \
-            .withColumn("signed_date", to_timestamp("signed_date")) \
-            # Rest of your cleaning operations...
-        pbar.update(1)
-        
-    return cleaned_df
+# Then set this as the default value for the widget
+dbutils.widgets.text("file_path", xml_file_path)
+
+# For table_name, keep as is
+dbutils.widgets.text("table_name", "staging.fpds_raw.contract_data_test")
+dbutils.widgets.text("source_metadata_table_name", "staging.fpds_raw.source_metadata")
+
+# Get the file name from the widget value, not the other way around
+file_name = os.path.basename(dbutils.widgets.get("file_path"))
