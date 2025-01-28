@@ -1,26 +1,89 @@
-# COMMAND ----------
-# Create or replace temp view with latest data
-spark.sql("""
-    CREATE OR REPLACE TEMPORARY VIEW latest_contract_data AS
-    SELECT contract_data.*
-    FROM staging.fpds_raw.contract_data AS contract_data
-    INNER JOIN (
-        SELECT max(contract_data_1.insert_date) AS max
-        FROM staging.fpds_raw.contract_data contract_data_1
-    ) latest_date
-    ON contract_data.insert_date = latest_date.max
-""")
+from urllib.request import urlopen
+import xml.etree.ElementTree as et
+from datetime import datetime as dt
+import shutil
+import os
 
-# COMMAND ----------
-# Write the data to fpds schema
-spark.sql("""
-    CREATE TABLE IF NOT EXISTS fpds.contract_data
-    AS SELECT * FROM latest_contract_data
-""")
+# Base paths setup
+BASE_PATH = '/Volumes/staging/fpds'
+RAW_PATH = os.path.join(BASE_PATH, 'raw')
 
-# COMMAND ----------
-# Set owner if needed
-spark.sql("""
-    ALTER TABLE IF EXISTS fpds.contract_data
-    OWNER TO operational_dba
-""")
+def create_dated_folders(date):
+    """Create YYYY/MM folder structure and return the path"""
+    year = date.strftime('%Y')
+    month = date.strftime('%m')
+    folder_path = os.path.join(RAW_PATH, year, month)
+    os.makedirs(folder_path, exist_ok=True)
+    return folder_path
+
+def get_data():
+    """Function to get data from the atom feed and return 10 entries each time"""
+    response_XML = ''
+    request_Index = 0
+    request_Increment = 10
+    
+    while True:
+        # Create request URL string
+        request_URL = request_BaseURL + '%20LAST_MOD_DATE:[' + request_ModifiedDate + ']&start=' + str(request_Index)
+        print(request_URL)
+        
+        while True:
+            try:
+                # Submit request URL and save response
+                response_XML = urlopen(request_URL).read()
+                root = et.fromstring(response_XML)
+                print('There was a successful response, batch: {}'.format(request_Index))
+                break
+            except Exception as e:
+                print('There was an error during response, will try to request batch: {}'.format(request_Index))
+                print(request_URL)
+                continue
+        
+        # Loop through entries in response_XML
+        for entry in root.findall('{http://www.w3.org/2005/Atom}entry'):
+            entry_XML = et.tostring(entry) #, pretty_print=True)
+            yield entry_XML
+        
+        # Check loop condition
+        if root.findall('{http://www.w3.org/2005/Atom}entry') == []:
+            break
+        else:
+            request_Index = request_Index + request_Increment
+
+def write_data():
+    """Function to write entries to XML file with organized folder structure"""
+    # Get current date for folder creation
+    current_date = dt.now()
+    folder_path = create_dated_folders(current_date)
+    
+    # Create output filename with date
+    filename = f'fpds_{current_date.strftime("%Y%m%d")}.xml'
+    file_output_path = os.path.join(folder_path, filename)
+    
+    # Create output file
+    with open(file_output_path, 'w') as output_file:
+        # Write opening tag
+        output_file.write("<feed>")
+        
+        # Write each entry to output file
+        for entry_XML in get_data():
+            output_file.write(entry_XML.decode("utf-8"))
+            
+        # Write closing tag
+        output_file.write("</feed>")
+
+def main():
+    # Set Request Defaults
+    global request_BaseURL, request_ModifiedDate
+    
+    request_BaseURL = 'https://www.fpds.gov/dbsight/FEEDS/ATOM?templateName=1.5.3&FEEDNAME=PUBLIC&q=FUNDING_AGENCY_ID:"9555"'
+    request_ModifiedDate = '2019/01/01'
+    
+    # Create base folders if they don't exist
+    os.makedirs(RAW_PATH, exist_ok=True)
+    
+    # Execute main data fetch and write
+    write_data()
+
+if __name__ == "__main__":
+    main()
