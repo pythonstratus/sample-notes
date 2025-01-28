@@ -1,87 +1,32 @@
-from urllib.request import urlopen
-import xml.etree.ElementTree as et
-from datetime import datetime as dt
 import os
-import shutil
+from datetime import datetime
+import glob
 
-# Base paths setup
-BASE_PATH = '/Volumes/staging/fpds'
-RAW_PATH = os.path.join(BASE_PATH, 'raw')
-
-def create_dated_folders(date):
-    """Create YYYY/MM folder structure and return the path"""
-    year = date.strftime('%Y')
-    month = date.strftime('%m')
-    folder_path = os.path.join(RAW_PATH, year, month)
-    os.makedirs(folder_path, exist_ok=True)
-    return folder_path
-
-def get_data():
-    """Function to get data from the atom feed and return 10 entries each time"""
-    response_XML = ''
-    request_Index = 0
-    request_Increment = 10
+def get_latest_xml_file_path(base_path="/Volumes/staging/fpds_raw/landing/raw"):
+    """
+    Returns the path to the latest XML file in the specified directory structure.
+    The function looks for files matching the fpds_output_{date}.xml pattern.
     
-    while True:
-        # Create request URL string
-        request_URL = request_BaseURL + '%20LAST_MOD_DATE:[' + request_ModifiedDate + '],' + '&start=' + str(request_Index)
-        print(request_URL)
+    Args:
+        base_path (str): Base directory path to search in
+    
+    Returns:
+        str: Full path to the latest XML file
+    """
+    # Get current year and month
+    current_date = datetime.now()
+    year_month = current_date.strftime('%Y/%m')
+    
+    # Construct the search path
+    search_path = os.path.join(base_path, year_month)
+    
+    # Get list of all XML files in the directory
+    xml_pattern = os.path.join(search_path, f"fpds_output_*.xml")
+    xml_files = glob.glob(xml_pattern)
+    
+    if not xml_files:
+        return None
         
-        while True:
-            try:
-                # Submit request URL and save response
-                response_XML = urlopen(request_URL).read()
-                root = et.fromstring(response_XML)
-                print('There was a successful response, batch: {}'.format(request_Index))
-                break
-            except Exception as e:
-                print('There was an error during response, will try to request batch: {}'.format(request_Index))
-                print(request_URL)
-                continue
-        
-        # Loop through entries in response_XML
-        for entry in root.findall('{http://www.w3.org/2005/Atom}entry'):
-            entry_XML = et.tostring(entry)
-            yield entry_XML
-        
-        # Check loop condition
-        if root.findall('{http://www.w3.org/2005/Atom}entry') == []:
-            break
-        else:
-            request_Index = request_Index + request_Increment
-
-def write_data():
-    current_date = dt.now()
-    folder_path = create_dated_folders(current_date)
-    
-    destination_folder = '/Volumes/staging/fpds_raw/landing/fpds/'
-    destination_folder2 = '/Volumes/staging/fpds_raw/landing/fpds/' + dt.now().strftime("%Y-%m-%d") + '_fpds_output.xml'
-    file_output_path = os.path.join(folder_path, 'fpds_output_' + dt.now().strftime("%Y-%m-%d") + '.xml')
-    
-    output_file = open(file_output_path, 'w')
-    output_file.write("<feed>")
-    
-    for entry_XML in get_data():
-        output_file.write(entry_XML.decode("utf-8"))
-    
-    output_file.write("</feed>")
-    output_file.close()
-    
-    shutil.copy(file_output_path, destination_folder)
-    shutil.copy(file_output_path, destination_folder2)
-
-def main():
-    # Set Request Defaults
-    global request_BaseURL, request_ModifiedDate
-    
-    request_BaseURL = 'https://www.fpds.gov/dbsight/FEEDS/ATOM?templateName=1.5.3&FEEDNAME=PUBLIC&q=FUNDING_AGENCY_ID:"9555"'
-    request_ModifiedDate = '2010/01/01'
-    
-    # Create base folders if they don't exist
-    os.makedirs(RAW_PATH, exist_ok=True)
-    
-    # Execute main data fetch and write
-    write_data()
-
-if __name__ == "__main__":
-    main()
+    # Return the latest file (should be the most recent date in filename)
+    latest_file = max(xml_files)
+    return latest_file
