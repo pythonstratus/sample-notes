@@ -1,12 +1,23 @@
-# First, create a variable with the formatted path
-xml_file_path = f"/Volumes/staging/fpds_raw/landing/fpds_output_{datetime.now().strftime('%Y-%m-%d')}.xml"
+# Create or replace temp view with latest data
+spark.sql("""
+    CREATE OR REPLACE TEMPORARY VIEW latest_contract_data AS
+    SELECT contract_data.*
+    FROM staging.fpds_raw.contract_data AS contract_data
+    INNER JOIN (
+        SELECT max(contract_data_1.insert_date) AS max
+        FROM staging.fpds_raw.contract_data contract_data_1
+    ) latest_date
+    ON contract_data.insert_date = latest_date.max
+""")
 
-# Then set this as the default value for the widget
-dbutils.widgets.text("file_path", xml_file_path)
+# Write the data to fpds schema
+spark.sql("""
+    CREATE TABLE IF NOT EXISTS fpds.contract_data
+    AS SELECT * FROM latest_contract_data
+""")
 
-# For table_name, keep as is
-dbutils.widgets.text("table_name", "staging.fpds_raw.contract_data_test")
-dbutils.widgets.text("source_metadata_table_name", "staging.fpds_raw.source_metadata")
-
-# Get the file name from the widget value, not the other way around
-file_name = os.path.basename(dbutils.widgets.get("file_path"))
+# Set owner if needed
+spark.sql("""
+    ALTER TABLE IF EXISTS fpds.contract_data
+    OWNER TO operational_dba
+""")
