@@ -17,40 +17,37 @@ def create_dated_folders(date):
 
 def get_data():
     """Function to get data from the atom feed and return 10 entries each time"""
+    response_XML = ''
     request_Index = 0
     request_Increment = 10
     
     while True:
-        try:
-            # Create request URL string
-            request_URL = request_BaseURL + '%20LAST_MOD_DATE:[' + request_ModifiedDate + ']&start=' + str(request_Index)
-            print(f"Requesting batch {request_Index}...")
-            print(request_URL)
-            
-            # Submit request URL and save response
-            response_XML = urlopen(request_URL).read()
-            root = et.fromstring(response_XML)
-            
-            # Get entries from current batch
-            entries = root.findall('{http://www.w3.org/2005/Atom}entry')
-            
-            if not entries:  # If no entries found
-                print(f"No more entries found after {request_Index} entries")
+        # Create request URL string
+        request_URL = request_BaseURL + '%20LAST_MOD_DATE:[' + request_ModifiedDate + ']&start=' + str(request_Index)
+        print(request_URL)
+        
+        while True:
+            try:
+                # Submit request URL and save response
+                response_XML = urlopen(request_URL).read()
+                root = et.fromstring(response_XML)
+                print('There was a successful response, batch: {}'.format(request_Index))
                 break
-                
-            print(f'Successfully retrieved batch: {request_Index} with {len(entries)} entries')
-            
-            # Yield each entry
-            for entry in entries:
-                yield et.tostring(entry)
-            
-            # Increment for next batch
-            request_Index += request_Increment
-            
-        except Exception as e:
-            print(f'Error occurred: {str(e)}')
-            print(f'Failed URL: {request_URL}')
-            raise  # Re-raise the exception to stop processing
+            except Exception as e:
+                print('There was an error during response, will try to request batch: {}'.format(request_Index))
+                print(request_URL)
+                continue
+        
+        # Loop through entries in response_XML
+        for entry in root.findall('{http://www.w3.org/2005/Atom}entry'):
+            entry_XML = et.tostring(entry)
+            yield entry_XML
+        
+        # Check loop condition
+        if root.findall('{http://www.w3.org/2005/Atom}entry') == []:
+            break
+        else:
+            request_Index = request_Index + request_Increment
 
 def write_data():
     """Function to write entries to XML file with organized folder structure"""
@@ -62,39 +59,34 @@ def write_data():
     filename = f'fpds_{current_date.strftime("%Y%m%d")}.xml'
     file_output_path = os.path.join(folder_path, filename)
     
-    print(f"Writing to: {file_output_path}")
-    entries_count = 0
-    
     # Create output file
-    with open(file_output_path, 'w') as output_file:
-        # Write opening tag
-        output_file.write('<?xml version="1.0" encoding="UTF-8"?>\n')
-        output_file.write("<feed>\n")
-        
-        # Write each entry to output file
-        for entry_XML in get_data():
-            output_file.write(entry_XML.decode("utf-8") + "\n")
-            entries_count += 1
-            
-        # Write closing tag
-        output_file.write("</feed>")
+    output_file = open(file_output_path, 'w')
     
-    print(f"Successfully wrote {entries_count} entries to file")
-    return file_output_path
+    # Write opening tag
+    output_file.write("<feed>")
+    
+    # Write each entry to output file
+    for entry_XML in get_data():
+        output_file.write(entry_XML.decode("utf-8"))
+        
+    # Write closing tag
+    output_file.write("</feed>")
+    
+    # Close output file
+    output_file.close()
 
 def main():
     # Set Request Defaults
     global request_BaseURL, request_ModifiedDate
     
     request_BaseURL = 'https://www.fpds.gov/dbsight/FEEDS/ATOM?templateName=1.5.3&FEEDNAME=PUBLIC&q=FUNDING_AGENCY_ID:"9555"'
-    request_ModifiedDate = '2019/01/01'
+    request_ModifiedDate = '2010/01/01'
     
     # Create base folders if they don't exist
     os.makedirs(RAW_PATH, exist_ok=True)
     
     # Execute main data fetch and write
-    output_path = write_data()
-    print(f"Process completed. File saved to: {output_path}")
+    write_data()
 
 if __name__ == "__main__":
     main()
