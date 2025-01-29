@@ -1,7 +1,4 @@
 try:
-    # First define xml_file_path in the global scope
-    xml_file_path = None
-    
     # Get current year and month
     current_date = datetime.now()
     year_month = current_date.strftime('%Y/%m')
@@ -19,9 +16,9 @@ try:
     if not found_files:
         raise ValueError(f"No XML files found in path: {search_path}")
     
-    # Convert the list result to a single string path
-    xml_file_path = str(max(found_files))
-    print(f"Selected XML file path: {xml_file_path}")  # Debug print
+    # Sort files by modification time instead of using max()
+    xml_file_path = str(sorted(found_files, key=os.path.getmtime)[-1])
+    print(f"Selected most recent XML file: {xml_file_path}")  # Debug print
     
     # Verify it's a string and not empty
     if not isinstance(xml_file_path, str) or not xml_file_path:
@@ -45,35 +42,3 @@ except Exception as e:
     print(f"Type of xml_file_path: {type(xml_file_path) if 'xml_file_path' in locals() else 'Not defined'}")
     print(f"Value of xml_file_path: {xml_file_path if 'xml_file_path' in locals() else 'Not defined'}")
     raise
-
-
-
-
-def get_latest_xml_file_path(base_path="/Volumes/staging/fpds_raw/landing/raw"):
-    """
-    Returns the path to the latest XML file in the specified directory structure.
-    """
-    try:
-        current_date = datetime.now()
-        year_month = current_date.strftime('%Y/%m')
-        search_path = os.path.join(base_path, year_month)
-        
-        print(f"Search path: {search_path}")  # Debug print
-        
-        xml_pattern = os.path.join(search_path, "fpds_output_*.xml")
-        xml_files = glob.glob(xml_pattern)
-        
-        print(f"Found XML files: {xml_files}")  # Debug print
-        
-        if not xml_files:
-            raise ValueError(f"No XML files found in path: {xml_pattern}")
-        
-        # Convert to string immediately
-        latest_file = str(max(xml_files))
-        print(f"Selected latest file: {latest_file}")  # Debug print
-        
-        return latest_file
-        
-    except Exception as e:
-        print(f"Error in get_latest_xml_file_path: {str(e)}")
-        raise
