@@ -2,12 +2,22 @@ try:
     # First define xml_file_path in the global scope
     xml_file_path = None
     
-    # Get the XML file path
-    found_files = glob.glob(os.path.join("/Volumes/staging/fpds_raw/landing/raw/2025/01", "fpds_output_*.xml"))
+    # Get current year and month
+    current_date = datetime.now()
+    year_month = current_date.strftime('%Y/%m')
+    
+    # Construct the search path dynamically
+    base_path = "/Volumes/staging/fpds_raw/landing/raw"
+    search_path = os.path.join(base_path, year_month)
+    
+    print(f"Search path: {search_path}")  # Debug print
+    
+    # Find XML files
+    found_files = glob.glob(os.path.join(search_path, "fpds_output_*.xml"))
     print(f"Found XML files: {found_files}")  # Debug print
     
     if not found_files:
-        raise ValueError("No XML files found")
+        raise ValueError(f"No XML files found in path: {search_path}")
     
     # Convert the list result to a single string path
     xml_file_path = str(max(found_files))
