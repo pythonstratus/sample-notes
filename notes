@@ -1,39 +1,37 @@
-import os
-from datetime import datetime
-import glob
+try:
+    # First define xml_file_path in the global scope
+    xml_file_path = None
+    
+    # Get the XML file path
+    found_files = glob.glob(os.path.join("/Volumes/staging/fpds_raw/landing/raw/2025/01", "fpds_output_*.xml"))
+    print(f"Found XML files: {found_files}")  # Debug print
+    
+    if not found_files:
+        raise ValueError("No XML files found")
+    
+    # Convert the list result to a single string path
+    xml_file_path = str(max(found_files))
+    print(f"Selected XML file path: {xml_file_path}")  # Debug print
+    
+    # Verify it's a string and not empty
+    if not isinstance(xml_file_path, str) or not xml_file_path:
+        raise ValueError(f"Invalid XML file path: {xml_file_path}")
+    
+    # Remove existing widgets
+    dbutils.widgets.removeAll()
+    
+    # Create widgets with verified string values
+    dbutils.widgets.text("file_path", xml_file_path)
+    dbutils.widgets.text("table_name", "staging.fpds_raw.contract_data")
+    dbutils.widgets.text("source_metadata_table_name", "staging.fpds_raw.source_metadata")
+    
+    # Get and print the filename for verification
+    file_name = os.path.basename(xml_file_path)
+    print(f"xml_file_path-->{xml_file_path}")
+    print(f"file_name-->{file_name}")
 
-def get_latest_xml_file_path(base_path="/Volumes/staging/fpds_raw/landing/raw"):
-    """
-    Returns the path to the latest XML file in the specified directory structure.
-    
-    Args:
-        base_path (str): Base directory path to search in
-    
-    Returns:
-        str: Full path to the latest XML file found in the directory
-    """
-    # Get current year and month
-    current_date = datetime.now()
-    year_month = current_date.strftime('%Y/%m')
-    
-    # Construct the search path
-    search_path = os.path.join(base_path, year_month)
-    
-    # Get list of all XML files in the directory
-    xml_pattern = os.path.join(search_path, "fpds_output_*.xml")
-    xml_files = glob.glob(xml_pattern)
-    
-    if not xml_files:
-        return None
-        
-    # Get the latest file
-    latest_file = max(xml_files)
-    
-    return latest_file
-
-# Create widgets for parameterization
-xml_file_path = get_latest_xml_file_path()
-dbutils.widgets.text("file_path", xml_file_path)
-dbutils.widgets.text("table_name", "staging.fpds_raw.contract_data")
-dbutils.widgets.text("source_metadata_table_name", "staging.fpds_raw.source_metadata")
-file_name = os.path.basename(dbutils.widgets.get("file_path"))
+except Exception as e:
+    print(f"Error setting up widgets: {str(e)}")
+    print(f"Type of xml_file_path: {type(xml_file_path) if 'xml_file_path' in locals() else 'Not defined'}")
+    print(f"Value of xml_file_path: {xml_file_path if 'xml_file_path' in locals() else 'Not defined'}")
+    raise
