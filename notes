@@ -1,10 +1,280 @@
-spark.sql("""
-CREATE OR REPLACE TABLE fpds.contract_data AS
-SELECT contract_data.* 
-FROM staging.fpds_raw.contract_data AS contract_data
-INNER JOIN (
-    SELECT max(insert_date) AS max
-    FROM staging.fpds_raw.contract_data
-) latest_date
-ON contract_data.insert_date = latest_date.max
-""")
+# Databricks notebook source
+# MAGIC %md
+# MAGIC # FPDS Data Validation Checks
+# MAGIC This notebook performs validation checks between WDCDWL01 (PostgreSQL) and Databricks Silver schema for FPDS contract data.
+
+# COMMAND ----------
+from pyspark.sql import functions as F
+from pyspark.sql.types import *
+import pandas as pd
+
+# COMMAND ----------
+# MAGIC %md
+# MAGIC ## Define Source and Target Tables
+
+# Define the source and target table references
+SOURCE_TABLE = "ppas_wdcdwl01_fpds.fpds.contract_data"
+TARGET_TABLE = "staging.fpds.contract_data"
+
+# COMMAND ----------
+# MAGIC %md
+# MAGIC ## Define Utility Functions
+
+def get_column_metadata(table_name):
+    """Get column metadata for the specified table"""
+    return spark.sql(f"DESCRIBE {table_name}")
+
+def compare_row_counts(source_table, target_table):
+    """Compare row counts between source and target tables"""
+    source_count = spark.sql(f"SELECT COUNT(*) as count FROM {source_table}").collect()[0]['count']
+    target_count = spark.sql(f"SELECT COUNT(*) as count FROM {target_table}").collect()[0]['count']
+    
+    return {
+        'source_count': source_count,
+        'target_count': target_count,
+        'matches': source_count == target_count
+    }
+
+def compare_column_names(source_metadata, target_metadata):
+    """Compare column names between source and target tables"""
+    source_cols = set([row['col_name'].lower() for row in source_metadata.collect()])
+    target_cols = set([row['col_name'].lower() for row in target_metadata.collect()])
+    
+    return {
+        'matching_columns': source_cols.intersection(target_cols),
+        'source_only': source_cols - target_cols,
+        'target_only': target_cols - source_cols,
+        'matches': source_cols == target_cols
+    }
+
+def compare_datatypes(source_metadata, target_metadata):
+    """Compare data types between source and target tables"""
+    source_dtypes = {row['col_name'].lower(): row['data_type'].lower() for row in source_metadata.collect()}
+    target_dtypes = {row['col_name'].lower(): row['data_type'].lower() for row in target_metadata.collect()}
+    
+    mismatches = {}
+    for col in set(source_dtypes.keys()).intersection(set(target_dtypes.keys())):
+        # Map PostgreSQL types to Spark types for comparison
+        source_type = map_postgres_to_spark_type(source_dtypes[col])
+        target_type = target_dtypes[col]
+        
+        if source_type != target_type:
+            mismatches[col] = {
+                'source_type': source_dtypes[col],
+                'target_type': target_dtypes[col]
+            }
+    
+    return {
+        'matches': len(mismatches) == 0,
+        'mismatches': mismatches
+    }
+
+def map_postgres_to_spark_type(postgres_type):
+    """Map PostgreSQL data types to corresponding Spark data types"""
+    type_mapping = {
+        'integer': 'int',
+        'bigint': 'bigint',
+        'character varying': 'string',
+        'varchar': 'string',
+        'text': 'string',
+        'double precision': 'double',
+        'numeric': 'decimal',
+        'boolean': 'boolean',
+        'timestamp without time zone': 'timestamp',
+        'date': 'date'
+    }
+    
+    # Remove length specifications from type (e.g., varchar(255) -> varchar)
+    base_type = postgres_type.split('(')[0].lower()
+    return type_mapping.get(base_type, postgres_type)
+
+def analyze_null_counts(table_name):
+    """Get null counts for each column in the table"""
+    columns = spark.sql(f"DESCRIBE {table_name}").select('col_name').collect()
+    null_counts = {}
+    
+    for col in columns:
+        col_name = col['col_name']
+        count = spark.sql(f"""
+            SELECT COUNT(*) as null_count 
+            FROM {table_name} 
+            WHERE {col_name} IS NULL
+        """).collect()[0]['null_count']
+        null_counts[col_name.lower()] = count
+    
+    return null_counts
+
+def analyze_numeric_columns(table_name):
+    """Get summary statistics for numeric columns"""
+    metadata = spark.sql(f"DESCRIBE {table_name}")
+    numeric_cols = [
+        row['col_name'] for row in metadata.collect() 
+        if any(type_str in row['data_type'].lower() 
+              for type_str in ['int', 'double', 'decimal', 'numeric', 'real'])
+    ]
+    
+    results = {}
+    for col in numeric_cols:
+        stats = spark.sql(f"""
+            SELECT 
+                MIN({col}) as min_val,
+                MAX({col}) as max_val,
+                SUM({col}) as sum_val
+            FROM {table_name}
+        """).collect()[0]
+        
+        results[col.lower()] = {
+            'min': stats['min_val'],
+            'max': stats['max_val'],
+            'sum': stats['sum_val']
+        }
+    
+    return results
+
+def analyze_string_columns(table_name):
+    """Get distinct value counts for string columns"""
+    metadata = spark.sql(f"DESCRIBE {table_name}")
+    string_cols = [
+        row['col_name'] for row in metadata.collect() 
+        if any(type_str in row['data_type'].lower() 
+              for type_str in ['string', 'varchar', 'char', 'text'])
+    ]
+    
+    results = {}
+    for col in string_cols:
+        distinct_count = spark.sql(f"""
+            SELECT COUNT(DISTINCT {col}) as distinct_count
+            FROM {table_name}
+        """).collect()[0]['distinct_count']
+        
+        results[col.lower()] = distinct_count
+    
+    return results
+
+# COMMAND ----------
+# MAGIC %md
+# MAGIC ## Validation Function
+
+def run_validation_checks(source_table, target_table, environment):
+    """Run all validation checks for the specified environment"""
+    print(f"\n{'='*50}")
+    print(f"Running validation checks for {environment}")
+    print(f"{'='*50}")
+    print(f"\nSource: {source_table}")
+    print(f"Target: {target_table}\n")
+    
+    # Get metadata
+    source_metadata = get_column_metadata(source_table)
+    target_metadata = get_column_metadata(target_table)
+    
+    # 1. Metadata Comparison
+    print("\n--- Metadata Comparison ---")
+    col_comparison = compare_column_names(source_metadata, target_metadata)
+    dtype_comparison = compare_datatypes(source_metadata, target_metadata)
+    
+    print(f"Column names match: {col_comparison['matches']}")
+    if not col_comparison['matches']:
+        print("\nColumns in source only:", sorted(col_comparison['source_only']))
+        print("\nColumns in target only:", sorted(col_comparison['target_only']))
+    
+    print(f"\nData types match: {dtype_comparison['matches']}")
+    if not dtype_comparison['matches']:
+        print("\nData type mismatches:")
+        for col, types in dtype_comparison['mismatches'].items():
+            print(f"Column: {col}")
+            print(f"  Source type: {types['source_type']}")
+            print(f"  Target type: {types['target_type']}")
+    
+    # 2. Row Count Comparison
+    print("\n--- Row Count Comparison ---")
+    row_counts = compare_row_counts(source_table, target_table)
+    print(f"Row counts match: {row_counts['matches']}")
+    print(f"Source count: {row_counts['source_count']:,}")
+    print(f"Target count: {row_counts['target_count']:,}")
+    
+    # 3. Null Analysis
+    print("\n--- Null Analysis ---")
+    source_nulls = analyze_null_counts(source_table)
+    target_nulls = analyze_null_counts(target_table)
+    
+    null_differences = {
+        col: (source_nulls[col], target_nulls[col])
+        for col in set(source_nulls.keys()).intersection(set(target_nulls.keys()))
+        if source_nulls[col] != target_nulls[col]
+    }
+    
+    if null_differences:
+        print("\nColumns with different null counts:")
+        for col, (source_null, target_null) in null_differences.items():
+            print(f"{col}:")
+            print(f"  Source nulls: {source_null:,}")
+            print(f"  Target nulls: {target_null:,}")
+            print(f"  Difference: {abs(source_null - target_null):,}")
+    else:
+        print("\nNull counts match for all columns")
+    
+    # 4. Numeric Column Analysis
+    print("\n--- Numeric Column Analysis ---")
+    source_nums = analyze_numeric_columns(source_table)
+    target_nums = analyze_numeric_columns(target_table)
+    
+    numeric_differences = {
+        col: (source_nums[col], target_nums[col])
+        for col in set(source_nums.keys()).intersection(set(target_nums.keys()))
+        if source_nums[col] != target_nums[col]
+    }
+    
+    if numeric_differences:
+        print("\nNumeric columns with differences:")
+        for col, (source_stats, target_stats) in numeric_differences.items():
+            print(f"\n{col}:")
+            print(f"  Source: {source_stats}")
+            print(f"  Target: {target_stats}")
+    else:
+        print("\nAll numeric column statistics match")
+    
+    # 5. String Column Analysis
+    print("\n--- String Column Analysis ---")
+    source_strings = analyze_string_columns(source_table)
+    target_strings = analyze_string_columns(target_table)
+    
+    string_differences = {
+        col: (source_strings[col], target_strings[col])
+        for col in set(source_strings.keys()).intersection(set(target_strings.keys()))
+        if source_strings[col] != target_strings[col]
+    }
+    
+    if string_differences:
+        print("\nString columns with different distinct value counts:")
+        for col, (source_count, target_count) in string_differences.items():
+            print(f"{col}:")
+            print(f"  Source distinct values: {source_count:,}")
+            print(f"  Target distinct values: {target_count:,}")
+            print(f"  Difference: {abs(source_count - target_count):,}")
+    else:
+        print("\nAll string column distinct value counts match")
+
+# COMMAND ----------
+# MAGIC %md
+# MAGIC ## Run Validations for Each Environment
+
+# Staging (before incremental pipeline)
+run_validation_checks(
+    SOURCE_TABLE,
+    TARGET_TABLE,
+    "Staging (before incremental pipeline)"
+)
+
+# Staging (after incremental pipeline)
+run_validation_checks(
+    SOURCE_TABLE,
+    TARGET_TABLE,
+    "Staging (after incremental pipeline)"
+)
+
+# Production
+run_validation_checks(
+    SOURCE_TABLE.replace('staging', 'prod'),
+    TARGET_TABLE.replace('staging', 'prod'),
+    "Production"
+)
