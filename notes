@@ -13,16 +13,32 @@ import pandas as pd
 # MAGIC ## Define Source and Target Tables
 
 # Define the source and target table references
-SOURCE_TABLE = "ppas_wdcdwl01_fpds.fpds.contract_data"
-TARGET_TABLE = "staging.fpds.contract_data"
+SOURCE_TABLE = "ppas_wdcdwl01_fpds.fpds.contract_data"  # PostgreSQL source
+TARGET_TABLE = "staging.fpds.contract_data"              # Databricks view
 
 # COMMAND ----------
 # MAGIC %md
 # MAGIC ## Define Utility Functions
 
 def get_column_metadata(table_name):
-    """Get column metadata for the specified table"""
-    return spark.sql(f"DESCRIBE {table_name}")
+    """Get column metadata for the specified table or view"""
+    try:
+        # First try DESCRIBE EXTENDED to get full metadata
+        metadata = spark.sql(f"DESCRIBE EXTENDED {table_name}")
+        
+        # Filter to just the column definitions (exclude view properties)
+        column_metadata = metadata.filter(
+            ~F.col("col_name").startswith("#") &  # Exclude comment rows
+            ~F.col("col_name").isin(["", "# Detailed Table Information"]) &  # Exclude section headers
+            ~F.col("col_name").contains("Provider") &  # Exclude view-specific metadata
+            ~F.col("col_name").contains("Type")  # Exclude view type information
+        )
+        
+        return column_metadata
+    except Exception as e:
+        print(f"Error getting metadata for {table_name}: {str(e)}")
+        # Fallback to basic DESCRIBE if EXTENDED fails
+        return spark.sql(f"DESCRIBE {table_name}")
 
 def compare_row_counts(source_table, target_table):
     """Compare row counts between source and target tables"""
@@ -47,6 +63,25 @@ def compare_column_names(source_metadata, target_metadata):
         'matches': source_cols == target_cols
     }
 
+def map_postgres_to_spark_type(postgres_type):
+    """Map PostgreSQL data types to corresponding Spark data types"""
+    type_mapping = {
+        'integer': 'int',
+        'bigint': 'bigint',
+        'character varying': 'string',
+        'varchar': 'string',
+        'text': 'string',
+        'double precision': 'double',
+        'numeric': 'decimal',
+        'boolean': 'boolean',
+        'timestamp without time zone': 'timestamp',
+        'date': 'date'
+    }
+    
+    # Remove length specifications from type (e.g., varchar(255) -> varchar)
+    base_type = postgres_type.split('(')[0].lower()
+    return type_mapping.get(base_type, postgres_type)
+
 def compare_datatypes(source_metadata, target_metadata):
     """Compare data types between source and target tables"""
     source_dtypes = {row['col_name'].lower(): row['data_type'].lower() for row in source_metadata.collect()}
@@ -69,28 +104,13 @@ def compare_datatypes(source_metadata, target_metadata):
         'mismatches': mismatches
     }
 
-def map_postgres_to_spark_type(postgres_type):
-    """Map PostgreSQL data types to corresponding Spark data types"""
-    type_mapping = {
-        'integer': 'int',
-        'bigint': 'bigint',
-        'character varying': 'string',
-        'varchar': 'string',
-        'text': 'string',
-        'double precision': 'double',
-        'numeric': 'decimal',
-        'boolean': 'boolean',
-        'timestamp without time zone': 'timestamp',
-        'date': 'date'
-    }
-    
-    # Remove length specifications from type (e.g., varchar(255) -> varchar)
-    base_type = postgres_type.split('(')[0].lower()
-    return type_mapping.get(base_type, postgres_type)
-
 def analyze_null_counts(table_name):
-    """Get null counts for each column in the table"""
-    columns = spark.sql(f"DESCRIBE {table_name}").select('col_name').collect()
+    """Get null counts for each column in the table or view"""
+    # Get column names using the view-aware metadata function
+    columns = get_column_metadata(table_name).filter(
+        F.col("data_type").isNotNull()  # Only include actual columns
+    ).select('col_name').collect()
+    
     null_counts = {}
     
     for col in columns:
@@ -106,7 +126,7 @@ def analyze_null_counts(table_name):
 
 def analyze_numeric_columns(table_name):
     """Get summary statistics for numeric columns"""
-    metadata = spark.sql(f"DESCRIBE {table_name}")
+    metadata = get_column_metadata(table_name)
     numeric_cols = [
         row['col_name'] for row in metadata.collect() 
         if any(type_str in row['data_type'].lower() 
@@ -133,7 +153,7 @@ def analyze_numeric_columns(table_name):
 
 def analyze_string_columns(table_name):
     """Get distinct value counts for string columns"""
-    metadata = spark.sql(f"DESCRIBE {table_name}")
+    metadata = get_column_metadata(table_name)
     string_cols = [
         row['col_name'] for row in metadata.collect() 
         if any(type_str in row['data_type'].lower() 
@@ -153,7 +173,7 @@ def analyze_string_columns(table_name):
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC ## Validation Function
+# MAGIC ## Main Validation Function
 
 def run_validation_checks(source_table, target_table, environment):
     """Run all validation checks for the specified environment"""
