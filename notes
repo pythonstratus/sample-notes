@@ -1,8 +1,51 @@
-metadata_df.createOrReplaceTempView("updates")
-spark.sql(f"""
-    MERGE INTO {source_table_name} target
-    USING updates source
-    ON target.file_name = source.file_name
-    WHEN MATCHED THEN UPDATE SET *
-    WHEN NOT MATCHED THEN INSERT *
-""")
+
+Summary: Create Databricks notebook for FPDS XML data ingestion pipeline
+
+Description:
+Develop a Databricks notebook to:
+1. Download XML files from source location
+2. Transform XML data using PySpark
+3. Load raw data to fpdss_raw schema 
+4. Transform and load processed data to fpds schema
+
+Technical Requirements:
+- Implement error handling and logging
+- Validate XML schema conformance
+- Handle incremental loads
+- Add data quality checks
+- Include execution metrics logging
+- Configure notebook parameters for environment flexibility
+
+Definition of Done:
+- Successful end-to-end data pipeline execution
+- Data validation confirms accuracy of transformation
+- Documentation of data mappings and transformations
+- Unit tests for key functions
+- Performance metrics baseline established
+
+
+
+Summary: Create FPDS Workflow Tasks Following CFPB Framework
+
+Description:
+Develop workflow tasks to:
+1. Setup project structure per CFPB standards
+2. Implement logging framework
+3. Create configuration management
+4. Build error handling mechanisms
+5. Establish monitoring and alerting
+
+Technical Requirements:
+- Align with CFPB coding standards
+- Implement required security controls
+- Follow CFPB logging patterns
+- Use approved monitoring tools
+- Apply standard error handling templates
+
+Definition of Done:
+- Code review approval
+- Security scan clearance
+- Framework compliance verification
+- Documentation completion
+- Test coverage requirements met
+- Successful deployment validation
