@@ -1,51 +1,68 @@
+# FPDS Data Processing Workflow
 
-Summary: Create Databricks notebook for FPDS XML data ingestion pipeline
+## Overview
+This workflow processes Federal Procurement Data System (FPDS) data through multiple stages of transformation and validation. The pipeline is designed to handle procurement data while maintaining version history and transaction records.
 
-Description:
-Develop a Databricks notebook to:
-1. Download XML files from source location
-2. Transform XML data using PySpark
-3. Load raw data to fpdss_raw schema 
-4. Transform and load processed data to fpds schema
+## Workflow Components
 
-Technical Requirements:
-- Implement error handling and logging
-- Validate XML schema conformance
-- Handle incremental loads
-- Add data quality checks
-- Include execution metrics logging
-- Configure notebook parameters for environment flexibility
+### Task Settings
+- Task Name: `task_settings`
+- Purpose: Configures and initializes job parameters
+- Dependencies: None (Start node)
 
-Definition of Done:
-- Successful end-to-end data pipeline execution
-- Data validation confirms accuracy of transformation
-- Documentation of data mappings and transformations
-- Unit tests for key functions
-- Performance metrics baseline established
+### FPDS Scraper
+- Task Name: `fpds_scrapper`
+- Purpose: Extracts raw procurement data from FPDS system
+- Dependencies: Requires task_settings completion
+- Output: Raw procurement data
 
+### Bronze Layer
+- Task Name: `bronze`
+- Purpose: Initial data landing zone
+- Dependencies: Requires fpds_scrapper completion
+- Processing: Minimal transformation, maintains raw data integrity
+- Output: Bronze-level data store
 
+### FPDS Silver Ingest
+- Task Name: `fpds_silver_ingest`
+- Purpose: Refines and cleanses bronze data
+- Dependencies: Requires bronze layer completion
+- Processing: Data validation, standardization, and quality checks
+- Output: Silver-level refined dataset
 
-Summary: Create FPDS Workflow Tasks Following CFPB Framework
+### Additional Components
 
-Description:
-Develop workflow tasks to:
-1. Setup project structure per CFPB standards
-2. Implement logging framework
-3. Create configuration management
-4. Build error handling mechanisms
-5. Establish monitoring and alerting
+#### File Version History
+- Component: `file_version_history`
+- Purpose: Maintains historical versions of processed files
+- Tracking: Version metadata, change history
 
-Technical Requirements:
-- Align with CFPB coding standards
-- Implement required security controls
-- Follow CFPB logging patterns
-- Use approved monitoring tools
-- Apply standard error handling templates
+#### Transaction History
+- Component: `transaction_history`
+- Purpose: Records all data transformations
+- Tracking: Operation logs, data lineage
 
-Definition of Done:
-- Code review approval
-- Security scan clearance
-- Framework compliance verification
-- Documentation completion
-- Test coverage requirements met
-- Successful deployment validation
+## Workflow Architecture
+The workflow follows a medallion architecture:
+1. Raw data ingestion via FPDS scraper
+2. Bronze layer for raw storage
+3. Silver layer for refined data
+4. Supporting components for version control and transaction logging
+
+## Best Practices
+- Monitor task completion status
+- Review logs in transaction_history for data lineage
+- Verify file versions in file_version_history
+- Ensure proper task dependencies are maintained
+
+## Error Handling
+- Each task includes error logging
+- Failed tasks trigger alerts
+- Transaction history maintains error states
+- Version control allows for data recovery
+
+## Maintenance
+- Regular monitoring of task execution times
+- Periodic review of data quality metrics
+- Version history cleanup as needed
+- Transaction log maintenance
