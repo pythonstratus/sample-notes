@@ -1,68 +1,85 @@
-# FPDS Data Processing Workflow
+# Task Settings Configuration
 
-## Overview
-This workflow processes Federal Procurement Data System (FPDS) data through multiple stages of transformation and validation. The pipeline is designed to handle procurement data while maintaining version history and transaction records.
+## Purpose
+Initializes job configuration by loading settings from JSON files and registering them as Databricks job parameters.
 
-## Workflow Components
+## Implementation
+The code performs two main operations:
 
-### Task Settings
-- Task Name: `task_settings`
-- Purpose: Configures and initializes job parameters
-- Dependencies: None (Start node)
+1. **Settings Loading**
+   - Reads multiple JSON configuration files from `settings/task_settings/` directory
+   - Loads settings for: datasync, bronze, silver, gold, file version history, and transaction history
 
-### FPDS Scraper
-- Task Name: `fpds_scrapper`
-- Purpose: Extracts raw procurement data from FPDS system
-- Dependencies: Requires task_settings completion
-- Output: Raw procurement data
+2. **Job Parameter Registration**
+   - Uses `dbutils.jobs.taskValues.set()` to register each configuration
+   - Makes settings accessible to downstream tasks in the workflow
 
-### Bronze Layer
-- Task Name: `bronze`
-- Purpose: Initial data landing zone
-- Dependencies: Requires fpds_scrapper completion
-- Processing: Minimal transformation, maintains raw data integrity
-- Output: Bronze-level data store
+## Configuration Files
+```
+settings/task_settings/
+├── datasync_settings.json
+├── bronze_settings.json
+├── silver_settings.json
+├── gold_settings.json
+├── file_version_history_settings.json
+└── transaction_history_settings.json
+```
 
-### FPDS Silver Ingest
-- Task Name: `fpds_silver_ingest`
-- Purpose: Refines and cleanses bronze data
-- Dependencies: Requires bronze layer completion
-- Processing: Data validation, standardization, and quality checks
-- Output: Silver-level refined dataset
+## Usage
+Settings can be accessed in downstream tasks using:
+```python
+dbutils.jobs.taskValues.get(key="<stage_name>")
+```
+Where `stage_name` is one of: datasync, bronze, silver, gold, file_version_history, or transaction_history
 
-### Additional Components
 
-#### File Version History
-- Component: `file_version_history`
-- Purpose: Maintains historical versions of processed files
-- Tracking: Version metadata, change history
+The Task Settings module serves as the initialization backbone of our Databricks workflow, handling the configuration setup for the entire data processing pipeline. It systematically loads and manages settings from six key configuration files - covering datasync, bronze, silver, and gold data layers, along with file version history and transaction tracking. These settings are read from JSON files and registered as job parameters using Databricks' utility functions, making them readily available to all downstream tasks. This centralized approach ensures consistent configuration management and enables seamless data processing across different stages of the workflow while maintaining proper versioning and transaction records.
 
-#### Transaction History
-- Component: `transaction_history`
-- Purpose: Records all data transformations
-- Tracking: Operation logs, data lineage
 
-## Workflow Architecture
-The workflow follows a medallion architecture:
-1. Raw data ingestion via FPDS scraper
-2. Bronze layer for raw storage
-3. Silver layer for refined data
-4. Supporting components for version control and transaction logging
+# FPDS Scraper
 
-## Best Practices
-- Monitor task completion status
-- Review logs in transaction_history for data lineage
-- Verify file versions in file_version_history
-- Ensure proper task dependencies are maintained
+## Purpose
+Automates the daily extraction of federal procurement data from the FPDS (Federal Procurement Data System) ATOM feeds, converting XML data into a structured format and organizing it in a chronological directory structure.
 
-## Error Handling
-- Each task includes error logging
-- Failed tasks trigger alerts
-- Transaction history maintains error states
-- Version control allows for data recovery
+## FPDS XML Scrapper
+## Implementation
+- Connects to FPDS ATOM feeds URL
+- Extracts latest XML procurement data files
+- Creates hierarchical storage structure (year/month/day)
+- Saves raw XML files in the raw volumes directory
+- Runs daily to ensure data currency
 
-## Maintenance
-- Regular monitoring of task execution times
-- Periodic review of data quality metrics
-- Version history cleanup as needed
-- Transaction log maintenance
+## Directory Structure
+```
+raw_volumes/
+└── fpds/
+    └── year/
+        └── month/
+            └── day/
+                └── fpds_data.xml
+```
+
+## Data Flow
+1. Connect to FPDS ATOM feed endpoint
+2. Download latest XML procurement data
+3. Generate date-based directory path
+4. Save XML in appropriate directory
+5. Prepare data for bronze layer ingestion
+
+
+Here's a talking point paragraph:
+
+The FPDS Scraper component acts as our automated data collection system, specifically designed to interact with the Federal Procurement Data System's ATOM feeds. Every day, it navigates to the FPDS URL to retrieve the latest procurement data in XML format. This data is then systematically stored in our raw volumes directory using a hierarchical year/month/day folder structure, ensuring organized data retention and easy historical access. This daily extraction process serves as the initial step in our data pipeline, providing fresh procurement data that flows into our bronze layer for further processing and analysis.
+
+
+## Bronze Layer
+
+Here's a talking point paragraph:
+
+The Bronze layer processing represents our initial data structuring phase, where we employ the `02_process_fpds_xml_to_df` function to transform raw FPDS XML data into a structured format. This crucial component processes and standardizes all 251 FPDS fields, converting them into a comprehensive DataFrame structure. The transformed data is then upserted into our fpds_raw table in the bronze layer, establishing our first level of structured data storage. This process ensures that all procurement data fields are accurately captured and properly organized, creating a reliable foundation for subsequent silver layer processing.
+
+
+## Final step:
+Here's a talking point paragraph:
+
+The FPDS contract data migration represents the final transformation step in our data pipeline, where we create a clean, current view of our procurement data. This process runs a targeted SQL operation that identifies and extracts the most recently inserted contract records from our bronze layer (fpds_raw) and loads them into our silver layer table. By performing a full replace operation based on the latest insert date, we ensure that our final contract_data table always contains the most up-to-date procurement information, maintaining data freshness and accuracy for downstream analysis and reporting.
