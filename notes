@@ -1,85 +1,44 @@
-# Task Settings Configuration
+# Get metrics after data processing
+from datetime import datetime
 
-## Purpose
-Initializes job configuration by loading settings from JSON files and registering them as Databricks job parameters.
+def get_processing_metrics():
+    # Get record counts
+    metrics_df = spark.sql("""
+        SELECT 
+            'fpds.contract_data' as table_name,
+            'fpds' as schema_name,
+            COUNT(*) as total_records,
+            SUM(CASE WHEN insert_date = current_date() THEN 1 ELSE 0 END) as new_records
+        FROM fpds.contract_data
+    """)
+    
+    return metrics_df.collect()[0]
 
-## Implementation
-The code performs two main operations:
+def format_email_body():
+    # Get metrics
+    metrics = get_processing_metrics()
+    
+    # Format email body with HTML
+    email_body = f"""
+    <html>
+    <body>
+    <h2>FPDS Data Processing Job Completed Successfully</h2>
+    <p>Job completed at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+    
+    <h3>Processing Metrics:</h3>
+    <ul>
+        <li>Schema Name: {metrics.schema_name}</li>
+        <li>Table Name: {metrics.table_name}</li>
+        <li>Total Records: {metrics.total_records:,}</li>
+        <li>New Records Added Today: {metrics.new_records:,}</li>
+    </ul>
+    
+    <p>For more details, please check the job logs in Databricks.</p>
+    </body>
+    </html>
+    """
+    return email_body
 
-1. **Settings Loading**
-   - Reads multiple JSON configuration files from `settings/task_settings/` directory
-   - Loads settings for: datasync, bronze, silver, gold, file version history, and transaction history
-
-2. **Job Parameter Registration**
-   - Uses `dbutils.jobs.taskValues.set()` to register each configuration
-   - Makes settings accessible to downstream tasks in the workflow
-
-## Configuration Files
-```
-settings/task_settings/
-├── datasync_settings.json
-├── bronze_settings.json
-├── silver_settings.json
-├── gold_settings.json
-├── file_version_history_settings.json
-└── transaction_history_settings.json
-```
-
-## Usage
-Settings can be accessed in downstream tasks using:
-```python
-dbutils.jobs.taskValues.get(key="<stage_name>")
-```
-Where `stage_name` is one of: datasync, bronze, silver, gold, file_version_history, or transaction_history
-
-
-The Task Settings module serves as the initialization backbone of our Databricks workflow, handling the configuration setup for the entire data processing pipeline. It systematically loads and manages settings from six key configuration files - covering datasync, bronze, silver, and gold data layers, along with file version history and transaction tracking. These settings are read from JSON files and registered as job parameters using Databricks' utility functions, making them readily available to all downstream tasks. This centralized approach ensures consistent configuration management and enables seamless data processing across different stages of the workflow while maintaining proper versioning and transaction records.
-
-
-# FPDS Scraper
-
-## Purpose
-Automates the daily extraction of federal procurement data from the FPDS (Federal Procurement Data System) ATOM feeds, converting XML data into a structured format and organizing it in a chronological directory structure.
-
-## FPDS XML Scrapper
-## Implementation
-- Connects to FPDS ATOM feeds URL
-- Extracts latest XML procurement data files
-- Creates hierarchical storage structure (year/month/day)
-- Saves raw XML files in the raw volumes directory
-- Runs daily to ensure data currency
-
-## Directory Structure
-```
-raw_volumes/
-└── fpds/
-    └── year/
-        └── month/
-            └── day/
-                └── fpds_data.xml
-```
-
-## Data Flow
-1. Connect to FPDS ATOM feed endpoint
-2. Download latest XML procurement data
-3. Generate date-based directory path
-4. Save XML in appropriate directory
-5. Prepare data for bronze layer ingestion
-
-
-Here's a talking point paragraph:
-
-The FPDS Scraper component acts as our automated data collection system, specifically designed to interact with the Federal Procurement Data System's ATOM feeds. Every day, it navigates to the FPDS URL to retrieve the latest procurement data in XML format. This data is then systematically stored in our raw volumes directory using a hierarchical year/month/day folder structure, ensuring organized data retention and easy historical access. This daily extraction process serves as the initial step in our data pipeline, providing fresh procurement data that flows into our bronze layer for further processing and analysis.
-
-
-## Bronze Layer
-
-Here's a talking point paragraph:
-
-The Bronze layer processing represents our initial data structuring phase, where we employ the `02_process_fpds_xml_to_df` function to transform raw FPDS XML data into a structured format. This crucial component processes and standardizes all 251 FPDS fields, converting them into a comprehensive DataFrame structure. The transformed data is then upserted into our fpds_raw table in the bronze layer, establishing our first level of structured data storage. This process ensures that all procurement data fields are accurately captured and properly organized, creating a reliable foundation for subsequent silver layer processing.
-
-
-## Final step:
-Here's a talking point paragraph:
-
-The FPDS contract data migration represents the final transformation step in our data pipeline, where we create a clean, current view of our procurement data. This process runs a targeted SQL operation that identifies and extracts the most recently inserted contract records from our bronze layer (fpds_raw) and loads them into our silver layer table. By performing a full replace operation based on the latest insert date, we ensure that our final contract_data table always contains the most up-to-date procurement information, maintaining data freshness and accuracy for downstream analysis and reporting.
+# Use in your notification settings
+email_body = format_email_body()
+dbutils.notebook.exit(email_body)
